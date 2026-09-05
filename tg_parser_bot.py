@@ -350,7 +350,11 @@ def main() -> None:
     # Use Telegram Webhook instead of long polling. Telegram's inbound POST
     # wakes a sleeping Render instance and avoids duplicate getUpdates conflicts.
     port = int(os.getenv("PORT", "8080"))
-    public_url = os.getenv("RENDER_EXTERNAL_URL", "https://lixiaolong-tg-parser.onrender.com").rstrip("/")
+    public_url = os.getenv("RENDER_EXTERNAL_URL", "").strip().rstrip("/")
+    if not public_url:
+        raise RuntimeError("RENDER_EXTERNAL_URL is not configured")
+    if not public_url.startswith("https://"):
+        raise RuntimeError("RENDER_EXTERNAL_URL must be an HTTPS URL")
     webhook_path = os.getenv("WEBHOOK_PATH", "telegram-webhook").strip("/")
     # Telegram accepts 1-256 characters for this secret. Deriving a stable
     # default avoids adding another Render secret while still authenticating

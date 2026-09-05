@@ -15,8 +15,9 @@ PowerShell：
 ```powershell
 $env:TELEGRAM_BOT_TOKEN = "你的 Bot Token"
 $env:REQUIRED_CHANNEL = "@你的频道用户名"
-python -m pip install -r outputs/tg_parser_requirements.txt
-python outputs/tg_parser_bot.py
+python -m pip install -r tg_parser_requirements.txt
+$env:RENDER_EXTERNAL_URL = "https://你的服务名.onrender.com"
+python tg_parser_bot.py
 ```
 
 机器人必须是目标频道管理员，否则无法检查用户是否关注。
@@ -24,10 +25,10 @@ python outputs/tg_parser_bot.py
 ## Render 部署
 
 1. 把项目上传到 GitHub。
-2. 在 Render 创建 Background Worker，选择 Free。
-3. Build Command：`pip install -r outputs/tg_parser_requirements.txt`
-4. Start Command：`python outputs/tg_parser_bot.py`
-5. 添加环境变量：`TELEGRAM_BOT_TOKEN`、`REQUIRED_CHANNEL`。
+2. 在 Render 创建 Web Service，选择 Free。
+3. Build Command：`pip install -r tg_parser_requirements.txt`
+4. Start Command：`python tg_parser_bot.py`
+5. 添加环境变量：`TELEGRAM_BOT_TOKEN`、`REQUIRED_CHANNEL`。Render 会为 Web Service 提供 `RENDER_EXTERNAL_URL`；若未自动提供，请将它设为服务的完整 HTTPS 地址。
 
 免费实例可能休眠或重启，临时文件不会永久保存。
 
