@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from typing import Optional
 from urllib.parse import urlparse
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, Update
 from telegram.constants import ChatMemberStatus
 from telegram.ext import (
     Application,
@@ -31,6 +31,7 @@ from content_parsers import fetch_public_metadata
 
 LOG = logging.getLogger("tg-parser-bot")
 URL_RE = re.compile(r"https?://[^\s<>]+", re.IGNORECASE)
+MENU_BUTTONS = [["视频解析", "钱包授权查询"], ["A股分析", "频道入口"]]
 
 
 @dataclass(frozen=True)
@@ -105,7 +106,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.effective_message.reply_text(
         "欢迎使用内容解析小工具。\n\n"
         "发送抖音或小红书链接即可识别。\n"
-        "当前版本先完成链接识别和任务框架，媒体处理仅面向你有权使用的内容。"
+        "当前版本先完成链接识别和任务框架，媒体处理仅面向你有权使用的内容。",
+        reply_markup=ReplyKeyboardMarkup(MENU_BUTTONS, resize_keyboard=True),
     )
 
 
@@ -121,7 +123,20 @@ async def check_membership(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not await require_membership(update, context):
         return
-    link = detect_platform(update.effective_message.text or "")
+    text = (update.effective_message.text or "").strip()
+    if text == "钱包授权查询":
+        await update.effective_message.reply_text("钱包授权查询模块正在接入。仅支持公开链上只读查询，绝不会索要私钥或助记词。")
+        return
+    if text == "A股分析":
+        await update.effective_message.reply_text("请发送股票代码（如 600519）。行情和分析功能正在接入，结果仅供参考，不构成投资建议。")
+        return
+    if text == "频道入口":
+        await update.effective_message.reply_text("频道： https://t.me/jksjsjs6969")
+        return
+    if text == "视频解析":
+        await update.effective_message.reply_text("请发送公开的抖音或小红书链接。")
+        return
+    link = detect_platform(text)
     if not link:
         await update.effective_message.reply_text("请发送抖音或小红书的公开链接。")
         return
