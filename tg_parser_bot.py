@@ -13,7 +13,6 @@ import re
 import threading
 import asyncio
 import io
-import random
 import tempfile
 from pathlib import Path
 import json
@@ -39,6 +38,7 @@ from content_parsers import fetch_public_metadata
 LOG = logging.getLogger("tg-parser-bot")
 URL_RE = re.compile(r"https?://[^\s<>]+", re.IGNORECASE)
 STOCK_CODE_RE = re.compile(r"^(?:sh|sz)?(\d{6})$", re.IGNORECASE)
+ANALYSIS_VARIANT = 0
 
 
 @dataclass(frozen=True)
@@ -116,7 +116,11 @@ def fetch_stock_quote(code: str) -> str:
              f"近30个交易日运行范围为 {period_low:.2f}-{period_high:.2f} 元，现价位于{zone}，{ma_text}。"
              f"短线不宜只看单日涨跌，后续关键在于支撑 {period_low:.2f} 元能否守住，以及能否有效消化 {period_high:.2f} 元附近压力。"),
         ]
-        narrative = random.choice(templates)
+        # Rotate through the templates so consecutive requests never appear
+        # to use the same wording (random choice could repeat by chance).
+        global ANALYSIS_VARIANT
+        narrative = templates[ANALYSIS_VARIANT % len(templates)]
+        ANALYSIS_VARIANT += 1
     else:
         narrative = f"{name}（{digits}）现价 {price:.2f} 元，较前收 {change:+.2f} 元（{pct:+.2f}%），当前盘面状态为{trend}。"
     return f"📊 {narrative}"
