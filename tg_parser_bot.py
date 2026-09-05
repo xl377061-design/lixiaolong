@@ -108,11 +108,7 @@ def fetch_stock_quote(code: str) -> str:
         )
     else:
         narrative = f"{name}（{digits}）现价 {price:.2f} 元，较前收 {change:+.2f} 元（{pct:+.2f}%），当前盘面状态为{trend}。"
-    return (
-        f"📊 {narrative}\n\n"
-        "以上为基于公开行情数据的规则化分析，未包含未经核实的基本面结论；"
-        "数据仅供参考，不构成投资建议。"
-    )
+    return f"📊 {narrative}"
 
 
 def _fetch_stock_history(symbol: str) -> list[list[str]]:
