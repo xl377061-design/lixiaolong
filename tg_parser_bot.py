@@ -10,13 +10,11 @@ from __future__ import annotations
 import logging
 import os
 import re
-import threading
 import asyncio
 import io
 import tempfile
 from pathlib import Path
 import json
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from dataclasses import dataclass
 from typing import Optional
 from urllib.parse import urlparse
@@ -349,23 +347,26 @@ def build_application() -> Application:
 
 def main() -> None:
     logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
-    # Render Web Services require a listening port. The bot still uses
-    # long-polling; this tiny health endpoint keeps the service deployable.
+    # Use Telegram Webhook instead of long polling. Telegram's inbound POST
+    # wakes a sleeping Render instance and avoids duplicate getUpdates conflicts.
     port = int(os.getenv("PORT", "8080"))
-
-    class HealthHandler(BaseHTTPRequestHandler):
-        def do_GET(self) -> None:  # noqa: N802
-            self.send_response(200)
-            self.send_header("Content-Type", "text/plain; charset=utf-8")
-            self.end_headers()
-            self.wfile.write(b"ok")
-
-        def log_message(self, format: str, *args: object) -> None:
-            return
-
-    health_server = ThreadingHTTPServer(("0.0.0.0", port), HealthHandler)
-    threading.Thread(target=health_server.serve_forever, daemon=True).start()
-    build_application().run_polling(allowed_updates=Update.ALL_TYPES)
+    public_url = os.getenv("RENDER_EXTERNAL_URL", "https://lixiaolong-tg-parser.onrender.com").rstrip("/")
+    webhook_path = os.getenv("WEBHOOK_PATH", "telegram-webhook").strip("/")
+    # Telegram accepts 1-256 characters for this secret. Deriving a stable
+    # default avoids adding another Render secret while still authenticating
+    # webhook requests; WEBHOOK_SECRET can override it when desired.
+    token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+    import hashlib
+    webhook_secret = os.getenv("WEBHOOK_SECRET", hashlib.sha256(token.encode()).hexdigest()[:32])
+    build_application().run_webhook(
+        listen="0.0.0.0",
+        port=port,
+        url_path=webhook_path,
+        webhook_url=f"{public_url}/{webhook_path}",
+        secret_token=webhook_secret,
+        drop_pending_updates=False,
+        allowed_updates=Update.ALL_TYPES,
+    )
 
 
 if __name__ == "__main__":
