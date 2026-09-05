@@ -39,6 +39,13 @@ LOG = logging.getLogger("tg-parser-bot")
 URL_RE = re.compile(r"https?://[^\s<>]+", re.IGNORECASE)
 STOCK_CODE_RE = re.compile(r"^(?:sh|sz)?(\d{6})$", re.IGNORECASE)
 ANALYSIS_VARIANT = 0
+STOCK_PROFILES = {
+    "300308": ("AI 算力与光模块龙头", "中际旭创作为全球光模块核心厂商，主营高速光收发模块，业务与全球算力基础设施及 AI 资本开支周期高度相关"),
+    "601179": ("特高压与电网设备龙头", "中国西电作为特高压及输配电设备核心厂商，主营变压器、组合电器及高压开关，业务与电网建设和电力扩容需求密切相关"),
+    "002436": ("半导体封装基板龙头", "兴森科技作为高端 PCB 及半导体封装基板厂商，主营高多层板与先进封装载板，业务与国产算力芯片封测及半导体周期相关"),
+    "600172": ("超硬材料与培育钻石龙头", "黄河旋风主营人造金刚石、超硬材料及培育钻石，业务覆盖工业精密加工、半导体散热及消费端培育钻石需求"),
+    "002935": ("时频器件与军工电子龙头", "天奥电子主营原子钟、晶体器件及时间同步系统，业务与国防信息化、北斗导航及卫星互联网建设相关"),
+}
 
 
 @dataclass(frozen=True)
@@ -103,7 +110,17 @@ def fetch_stock_quote(code: str) -> str:
             f"后市重点观察能否放量突破 {period_high:.2f} 附近压力并延续强势；"
             f"若回落跌破 {period_low:.2f} 附近支撑，则需留意趋势转弱。"
         )
-        templates = [
+        profile = STOCK_PROFILES.get(digits)
+        if profile:
+            industry, intro = profile
+            narrative = (
+                f"{name}（{digits}）｜{industry}。{intro}。"
+                f"从当前盘面看，股价处于近30日{zone}，现价 {price:.2f} 元，较前收 {change:+.2f} 元（{pct:+.2f}%）。"
+                f"近30个交易日运行区间约为 {period_low:.2f}-{period_high:.2f} 元，{ma_text}，整体呈{trend}特征。"
+                f"短期需关注前期套牢筹码的消化和成交量配合，{outlook}"
+            )
+        else:
+            templates = [
             (f"{name}（{digits}）目前运行在近30日{zone}，现价 {price:.2f} 元，较前收 {change:+.2f} 元（{pct:+.2f}%）。"
              f"近30个交易日价格区间约为 {period_low:.2f}-{period_high:.2f} 元，{ma_text}，盘面整体呈{trend}特征。{outlook}"),
             (f"从技术面看，{name}（{digits}）现价 {price:.2f} 元，日内变动 {change:+.2f} 元（{pct:+.2f}%），"
@@ -115,12 +132,12 @@ def fetch_stock_quote(code: str) -> str:
             (f"{name}（{digits}）当前处于{trend}状态，现价 {price:.2f} 元，单日涨跌 {change:+.2f} 元（{pct:+.2f}%）。"
              f"近30个交易日运行范围为 {period_low:.2f}-{period_high:.2f} 元，现价位于{zone}，{ma_text}。"
              f"短线不宜只看单日涨跌，后续关键在于支撑 {period_low:.2f} 元能否守住，以及能否有效消化 {period_high:.2f} 元附近压力。"),
-        ]
-        # Rotate through the templates so consecutive requests never appear
-        # to use the same wording (random choice could repeat by chance).
-        global ANALYSIS_VARIANT
-        narrative = templates[ANALYSIS_VARIANT % len(templates)]
-        ANALYSIS_VARIANT += 1
+            ]
+            # Rotate through the templates so consecutive requests never appear
+            # to use the same wording (random choice could repeat by chance).
+            global ANALYSIS_VARIANT
+            narrative = templates[ANALYSIS_VARIANT % len(templates)]
+            ANALYSIS_VARIANT += 1
     else:
         narrative = f"{name}（{digits}）现价 {price:.2f} 元，较前收 {change:+.2f} 元（{pct:+.2f}%），当前盘面状态为{trend}。"
     return f"📊 {narrative}"
