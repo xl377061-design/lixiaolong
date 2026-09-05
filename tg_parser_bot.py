@@ -12,6 +12,7 @@ import os
 import re
 import threading
 import asyncio
+import io
 import tempfile
 from pathlib import Path
 import json
@@ -244,8 +245,26 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         try:
             quote = await asyncio.to_thread(fetch_stock_quote, text)
             digits, chart = await asyncio.to_thread(make_stock_chart, text)
-            with chart.open("rb") as image:
-                await update.effective_message.reply_photo(photo=image, caption=quote)
+            image_bytes = chart.read_bytes()
+            await update.effective_message.reply_photo(
+                photo=io.BytesIO(image_bytes),
+                caption=quote,
+            )
+            # Republish the result to the owner's channel.  A channel failure
+            # must not hide the result from the user who requested it.
+            try:
+                channel_image = io.BytesIO(image_bytes)
+                channel_image.name = f"stock-{digits}.png"
+                await context.bot.send_photo(
+                    chat_id=required_channel(),
+                    photo=channel_image,
+                    caption=quote,
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("📊 个股解析", url="https://t.me/xiaolongko_ai_bot?start=stock")]
+                    ]),
+                )
+            except Exception:
+                LOG.exception("Failed to publish stock result to channel")
             chart.unlink(missing_ok=True)
         except Exception:
             await update.effective_message.reply_text("暂时无法读取该股票行情，请检查代码或稍后再试。")
