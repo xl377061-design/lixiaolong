@@ -13,6 +13,7 @@ import re
 import threading
 import asyncio
 import io
+import random
 import tempfile
 from pathlib import Path
 import json
@@ -102,11 +103,20 @@ def fetch_stock_quote(code: str) -> str:
             f"后市重点观察能否放量突破 {period_high:.2f} 附近压力并延续强势；"
             f"若回落跌破 {period_low:.2f} 附近支撑，则需留意趋势转弱。"
         )
-        narrative = (
-            f"{name}（{digits}）当前处于{zone}，现价 {price:.2f} 元，较前收 {change:+.2f} 元（{pct:+.2f}%）。"
-            f"近 30 个交易日价格运行区间约为 {period_low:.2f}-{period_high:.2f} 元，{ma_text}，"
-            f"当前盘面状态为{trend}。{outlook}"
-        )
+        templates = [
+            (f"{name}（{digits}）目前运行在近30日{zone}，现价 {price:.2f} 元，较前收 {change:+.2f} 元（{pct:+.2f}%）。"
+             f"近30个交易日价格区间约为 {period_low:.2f}-{period_high:.2f} 元，{ma_text}，盘面整体呈{trend}特征。{outlook}"),
+            (f"从技术面看，{name}（{digits}）现价 {price:.2f} 元，日内变动 {change:+.2f} 元（{pct:+.2f}%），"
+             f"股价位于近30日 {period_low:.2f}-{period_high:.2f} 元波动区间的{zone}。目前{ma_text}，短线节奏偏{trend}，"
+             f"后续应重点观察 {period_high:.2f} 压力与 {period_low:.2f} 支撑的得失。"),
+            (f"{name}（{digits}）最新报价 {price:.2f} 元，较前收{change:+.2f} 元，涨跌幅 {pct:+.2f}%。"
+             f"结合近30日走势，价格高低点约为 {period_high:.2f}/{period_low:.2f} 元，当前处于{zone}；{ma_text}。"
+             f"若后续放量站稳 {period_high:.2f} 元上方，趋势有望延续；反之跌破 {period_low:.2f} 元需防范转弱。"),
+            (f"{name}（{digits}）当前处于{trend}状态，现价 {price:.2f} 元，单日涨跌 {change:+.2f} 元（{pct:+.2f}%）。"
+             f"近30个交易日运行范围为 {period_low:.2f}-{period_high:.2f} 元，现价位于{zone}，{ma_text}。"
+             f"短线不宜只看单日涨跌，后续关键在于支撑 {period_low:.2f} 元能否守住，以及能否有效消化 {period_high:.2f} 元附近压力。"),
+        ]
+        narrative = random.choice(templates)
     else:
         narrative = f"{name}（{digits}）现价 {price:.2f} 元，较前收 {change:+.2f} 元（{pct:+.2f}%），当前盘面状态为{trend}。"
     return f"📊 {narrative}"
