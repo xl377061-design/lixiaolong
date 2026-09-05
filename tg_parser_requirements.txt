@@ -1,3 +1,2 @@
 python-telegram-bot>=22.0,<23
-yt-dlp>=2025.1.0
 matplotlib>=3.8,<4
