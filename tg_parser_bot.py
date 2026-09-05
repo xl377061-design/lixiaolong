@@ -100,6 +100,7 @@ def make_stock_chart(code: str) -> tuple[str, Path]:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+    from matplotlib.patches import Rectangle
     match = STOCK_CODE_RE.fullmatch(code.strip())
     if not match:
         raise ValueError("股票代码应为 6 位数字")
@@ -115,21 +116,35 @@ def make_stock_chart(code: str) -> tuple[str, Path]:
     if len(rows) < 5:
         raise RuntimeError("历史行情不足")
     dates = [r[0][5:] for r in rows]
+    opens = [float(r[1]) for r in rows]
     closes = [float(r[2]) for r in rows]
+    highs = [float(r[3]) for r in rows]
+    lows = [float(r[4]) for r in rows]
+    volumes = [float(r[5]) for r in rows]
     ma5 = [sum(closes[max(0, i-4):i+1]) / min(i + 1, 5) for i in range(len(closes))]
     ma20 = [sum(closes[max(0, i-19):i+1]) / min(i + 1, 20) for i in range(len(closes))]
     path = Path(tempfile.gettempdir()) / f"stock-{digits}.png"
-    fig, ax = plt.subplots(figsize=(8, 4.5), dpi=140)
+    fig, (ax, vol_ax) = plt.subplots(2, 1, figsize=(8, 5.5), dpi=140, sharex=True,
+                                     gridspec_kw={"height_ratios": [3, 1], "hspace": 0.05})
     fig.patch.set_facecolor("#f8fafc")
     ax.set_facecolor("#f8fafc")
-    ax.plot(dates, closes, label="Close", color="#2563eb", linewidth=2.2)
-    ax.plot(dates, ma5, label="MA5", color="#f59e0b", linewidth=1.4)
-    ax.plot(dates, ma20, label="MA20", color="#16a34a", linewidth=1.4)
-    ax.set_title(f"{digits} | 30D Price Trend", loc="left", fontweight="bold")
+    for i, (op, cl, hi, lo) in enumerate(zip(opens, closes, highs, lows)):
+        color = "#dc2626" if cl >= op else "#16a34a"
+        ax.vlines(i, lo, hi, color=color, linewidth=1)
+        ax.add_patch(Rectangle((i - 0.32, min(op, cl)), 0.64, max(abs(cl-op), 0.01),
+                               facecolor=color, edgecolor=color, alpha=0.9))
+    ax.plot(range(len(closes)), ma5, label="MA5", color="#f59e0b", linewidth=1.4)
+    ax.plot(range(len(closes)), ma20, label="MA20", color="#2563eb", linewidth=1.4)
+    ax.set_title(f"{digits} | 30D Candlestick", loc="left", fontweight="bold")
     ax.grid(alpha=0.18, linestyle="--")
     ax.spines[["top", "right"]].set_visible(False)
     ax.legend(frameon=False, ncol=3, loc="upper left")
-    ax.tick_params(axis="x", rotation=45, labelsize=8)
+    vol_ax.bar(range(len(volumes)), volumes, color="#94a3b8", width=0.65)
+    vol_ax.set_ylabel("Volume", fontsize=8)
+    vol_ax.grid(alpha=0.12, linestyle="--")
+    vol_ax.spines[["top", "right"]].set_visible(False)
+    ax.set_xticks(range(0, len(dates), max(1, len(dates)//8)))
+    ax.set_xticklabels([dates[i] for i in range(0, len(dates), max(1, len(dates)//8))], rotation=45, fontsize=8)
     fig.tight_layout()
     fig.savefig(path)
     plt.close(fig)
