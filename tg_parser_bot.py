@@ -160,8 +160,16 @@ def make_stock_chart(code: str) -> tuple[str, Path]:
     ma5 = [sum(closes[max(0, i-4):i+1]) / min(i + 1, 5) for i in range(len(closes))]
     ma20 = [sum(closes[max(0, i-19):i+1]) / min(i + 1, 20) for i in range(len(closes))]
     path = Path(tempfile.gettempdir()) / f"stock-{digits}.png"
-    fig, (ax, vol_ax) = plt.subplots(2, 1, figsize=(8, 5.5), dpi=140, sharex=True,
-                                     gridspec_kw={"height_ratios": [3, 1], "hspace": 0.05})
+    # Prefer common CJK fonts when available so chart labels stay Chinese on
+    # both Render Linux and local Windows environments.
+    plt.rcParams["font.sans-serif"] = ["Noto Sans CJK SC", "WenQuanYi Zen Hei", "SimHei", "DejaVu Sans"]
+    plt.rcParams["axes.unicode_minus"] = False
+    fig = plt.figure(figsize=(8.8, 5.9), dpi=140)
+    grid = fig.add_gridspec(2, 2, width_ratios=[3.5, 1.15], height_ratios=[3, 1],
+                            wspace=0.08, hspace=0.08)
+    ax = fig.add_subplot(grid[0, 0])
+    vol_ax = fig.add_subplot(grid[1, 0], sharex=ax)
+    chip_ax = fig.add_subplot(grid[:, 1], sharey=ax)
     fig.patch.set_facecolor("#f8fafc")
     ax.set_facecolor("#f8fafc")
     for i, (op, cl, hi, lo) in enumerate(zip(opens, closes, highs, lows)):
@@ -169,16 +177,34 @@ def make_stock_chart(code: str) -> tuple[str, Path]:
         ax.vlines(i, lo, hi, color=color, linewidth=1)
         ax.add_patch(Rectangle((i - 0.32, min(op, cl)), 0.64, max(abs(cl-op), 0.01),
                                facecolor=color, edgecolor=color, alpha=0.9))
-    ax.plot(range(len(closes)), ma5, label="MA5", color="#f59e0b", linewidth=1.4)
-    ax.plot(range(len(closes)), ma20, label="MA20", color="#2563eb", linewidth=1.4)
-    ax.set_title(f"{digits} | 30D Candlestick", loc="left", fontweight="bold")
+    ax.plot(range(len(closes)), ma5, label="5日均线", color="#f59e0b", linewidth=1.4)
+    ax.plot(range(len(closes)), ma20, label="20日均线", color="#2563eb", linewidth=1.4)
+    support, resistance = min(closes), max(closes)
+    ax.axhline(resistance, color="#dc2626", linestyle="--", linewidth=1.0, label="压力位")
+    ax.axhline(support, color="#16a34a", linestyle="--", linewidth=1.0, label="支撑位")
+    ax.annotate(f"压力位 {resistance:.2f}", xy=(len(closes) - 1, resistance),
+                xytext=(-6, 5), textcoords="offset points", ha="right", fontsize=8, color="#dc2626")
+    ax.annotate(f"支撑位 {support:.2f}", xy=(len(closes) - 1, support),
+                xytext=(-6, 5), textcoords="offset points", ha="right", fontsize=8, color="#16a34a")
+    ax.set_title(f"{digits}｜30日K线", loc="left", fontweight="bold")
     ax.grid(alpha=0.18, linestyle="--")
     ax.spines[["top", "right"]].set_visible(False)
     ax.legend(frameon=False, ncol=3, loc="upper left")
     vol_ax.bar(range(len(volumes)), volumes, color="#94a3b8", width=0.65)
-    vol_ax.set_ylabel("Volume", fontsize=8)
+    vol_ax.set_ylabel("成交量", fontsize=8)
     vol_ax.grid(alpha=0.12, linestyle="--")
     vol_ax.spines[["top", "right"]].set_visible(False)
+    # A rule-based chip-peak proxy: distribution of the last 30 closing prices.
+    # It is not a broker's proprietary cost-distribution dataset.
+    chip_ax.hist(closes, bins=12, orientation="horizontal", color="#8b5cf6", alpha=0.75,
+                 edgecolor="white", linewidth=0.4)
+    chip_ax.axhline(support, color="#16a34a", linestyle="--", linewidth=0.9)
+    chip_ax.axhline(resistance, color="#dc2626", linestyle="--", linewidth=0.9)
+    chip_ax.set_title("筹码峰", fontsize=10, fontweight="bold")
+    chip_ax.set_xlabel("密集度", fontsize=8)
+    chip_ax.grid(axis="y", alpha=0.12, linestyle="--")
+    chip_ax.spines[["top", "right"]].set_visible(False)
+    chip_ax.tick_params(axis="y", labelleft=False)
     ax.set_xticks(range(0, len(dates), max(1, len(dates)//8)))
     ax.set_xticklabels([dates[i] for i in range(0, len(dates), max(1, len(dates)//8))], rotation=45, fontsize=8)
     fig.tight_layout()
