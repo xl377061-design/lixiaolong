@@ -103,6 +103,18 @@ async def require_membership(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not await require_membership(update, context):
         return
+    payload = (context.args[0].lower() if context.args else "")
+    quick = {
+        "video": "请发送公开的抖音或小红书链接。",
+        "wallet": "请发送 EVM 钱包地址，我将进行只读授权查询（绝不索要私钥）。",
+        "stock": "请发送 A 股股票代码，例如 600519。结果仅供参考。",
+    }
+    if payload in quick:
+        await update.effective_message.reply_text(
+            quick[payload],
+            reply_markup=ReplyKeyboardMarkup(MENU_BUTTONS, resize_keyboard=True),
+        )
+        return
     await update.effective_message.reply_text(
         "欢迎使用内容解析小工具。\n\n"
         "发送抖音或小红书链接即可识别。\n"
