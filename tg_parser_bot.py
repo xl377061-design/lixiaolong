@@ -233,7 +233,7 @@ async def check_membership(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     query = update.callback_query
     if await is_subscribed(update, context):
         await query.answer()
-        await query.edit_message_text("关注验证通过。现在可以发送抖音或小红书链接了。")
+        await query.edit_message_text("关注验证通过。现在可以发送 6 位 A 股股票代码了。")
     else:
         await query.answer("还没有检测到关注，请先加入频道。", show_alert=True)
 
