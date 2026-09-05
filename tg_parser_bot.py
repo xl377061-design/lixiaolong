@@ -218,7 +218,6 @@ async def require_membership(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not await require_membership(update, context):
         return
-    await update.effective_message.reply_text("正在更新界面……", reply_markup=ReplyKeyboardRemove())
     await update.effective_message.reply_text(
         "欢迎使用 A 股个股解析。\n\n"
         "请发送 6 位股票代码，例如 600519。\n"
@@ -226,6 +225,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("📢 进入频道", url="https://t.me/jksjsjs6969")]
         ]),
+        # Also clears any legacy reply keyboard in the user's Telegram client.
+        # The removal is attached to the welcome message so no placeholder
+        # "正在更新界面" message is shown.
     )
 
 
