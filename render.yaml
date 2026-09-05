@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: tg-parser-bot
+    runtime: python
+    plan: free
+    buildCommand: pip install -r outputs/tg_parser_requirements.txt
+    startCommand: python outputs/tg_parser_bot.py
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: REQUIRED_CHANNEL
+        sync: false
