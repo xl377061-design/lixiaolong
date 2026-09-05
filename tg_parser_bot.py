@@ -14,12 +14,14 @@ import threading
 import asyncio
 import tempfile
 from pathlib import Path
+import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from dataclasses import dataclass
 from typing import Optional
 from urllib.parse import urlparse
+from urllib.request import Request, urlopen
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ChatMemberStatus
 from telegram.ext import (
     Application,
@@ -34,7 +36,7 @@ from content_parsers import fetch_public_metadata
 
 LOG = logging.getLogger("tg-parser-bot")
 URL_RE = re.compile(r"https?://[^\s<>]+", re.IGNORECASE)
-MENU_BUTTONS = [["视频解析", "钱包授权查询"], ["A股分析", "频道入口"]]
+STOCK_CODE_RE = re.compile(r"^(?:sh|sz)?(\d{6})$", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -62,6 +64,64 @@ def required_channel() -> str:
     if not channel:
         raise RuntimeError("REQUIRED_CHANNEL is not configured")
     return channel
+
+
+def fetch_stock_quote(code: str) -> str:
+    """Read a public Tencent quote; no trading or account access."""
+    match = STOCK_CODE_RE.fullmatch(code.strip())
+    if not match:
+        raise ValueError("股票代码应为 6 位数字")
+    digits = match.group(1)
+    market = "sh" if digits.startswith(("6", "68")) else "sz"
+    symbol = market + digits
+    req = Request(f"https://qt.gtimg.cn/q={symbol}", headers={"User-Agent": "Mozilla/5.0"})
+    raw = urlopen(req, timeout=10).read().decode("gbk", errors="replace")
+    payload = raw.split('="', 1)[-1].rsplit('"', 1)[0]
+    fields = payload.split("~")
+    if len(fields) < 6 or not fields[1]:
+        raise RuntimeError("未找到该股票行情")
+    name, price, previous = fields[1], float(fields[3]), float(fields[4])
+    change = price - previous
+    pct = (change / previous * 100) if previous else 0.0
+    return f"{name}（{digits}）\n现价：{price:.2f}\n涨跌：{change:+.2f}（{pct:+.2f}%）\n\n数据来自公开行情，仅供参考，不构成投资建议。"
+
+
+def make_stock_chart(code: str) -> tuple[str, Path]:
+    """Create a simple 30-day closing-price chart from a public quote feed."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    match = STOCK_CODE_RE.fullmatch(code.strip())
+    if not match:
+        raise ValueError("股票代码应为 6 位数字")
+    digits = match.group(1)
+    market = "sh" if digits.startswith(("6", "68")) else "sz"
+    symbol = market + digits
+    req = Request(
+        f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={symbol},day,,,30,qfq",
+        headers={"User-Agent": "Mozilla/5.0"},
+    )
+    data = json.loads(urlopen(req, timeout=10).read().decode("utf-8", errors="replace"))
+    rows = data.get("data", {}).get(symbol, {}).get("qfqday", [])
+    if len(rows) < 5:
+        raise RuntimeError("历史行情不足")
+    dates = [r[0][5:] for r in rows]
+    closes = [float(r[2]) for r in rows]
+    ma5 = [sum(closes[max(0, i-4):i+1]) / min(i + 1, 5) for i in range(len(closes))]
+    ma20 = [sum(closes[max(0, i-19):i+1]) / min(i + 1, 20) for i in range(len(closes))]
+    path = Path(tempfile.gettempdir()) / f"stock-{digits}.png"
+    fig, ax = plt.subplots(figsize=(8, 4.5), dpi=140)
+    ax.plot(dates, closes, label="收盘", color="#2563eb", linewidth=2)
+    ax.plot(dates, ma5, label="MA5", color="#f59e0b", linewidth=1.3)
+    ax.plot(dates, ma20, label="MA20", color="#16a34a", linewidth=1.3)
+    ax.set_title(f"{digits} 近30日行情")
+    ax.grid(alpha=0.2)
+    ax.legend()
+    ax.tick_params(axis="x", rotation=45, labelsize=8)
+    fig.tight_layout()
+    fig.savefig(path)
+    plt.close(fig)
+    return digits, path
 
 
 async def is_subscribed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
@@ -106,23 +166,10 @@ async def require_membership(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not await require_membership(update, context):
         return
-    payload = (context.args[0].lower() if context.args else "")
-    quick = {
-        "video": "请发送公开的抖音或小红书链接。",
-        "wallet": "请发送 EVM 钱包地址，我将进行只读授权查询（绝不索要私钥）。",
-        "stock": "请发送 A 股股票代码，例如 600519。结果仅供参考。",
-    }
-    if payload in quick:
-        await update.effective_message.reply_text(
-            quick[payload],
-            reply_markup=ReplyKeyboardMarkup(MENU_BUTTONS, resize_keyboard=True),
-        )
-        return
     await update.effective_message.reply_text(
-        "欢迎使用内容解析小工具。\n\n"
-        "发送抖音或小红书链接即可识别。\n"
-        "当前版本先完成链接识别和任务框架，媒体处理仅面向你有权使用的内容。",
-        reply_markup=ReplyKeyboardMarkup(MENU_BUTTONS, resize_keyboard=True),
+        "欢迎使用 A 股个股解析。\n\n"
+        "请发送 6 位股票代码，例如 600519。\n"
+        "行情数据仅供参考，不构成投资建议。",
     )
 
 
@@ -139,79 +186,17 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if not await require_membership(update, context):
         return
     text = (update.effective_message.text or "").strip()
-    if text == "钱包授权查询":
-        await update.effective_message.reply_text("钱包授权查询模块正在接入。仅支持公开链上只读查询，绝不会索要私钥或助记词。")
+    if STOCK_CODE_RE.fullmatch(text):
+        try:
+            quote = await asyncio.to_thread(fetch_stock_quote, text)
+            digits, chart = await asyncio.to_thread(make_stock_chart, text)
+            with chart.open("rb") as image:
+                await update.effective_message.reply_photo(photo=image, caption=quote)
+            chart.unlink(missing_ok=True)
+        except Exception:
+            await update.effective_message.reply_text("暂时无法读取该股票行情，请检查代码或稍后再试。")
         return
-    if text == "A股分析":
-        await update.effective_message.reply_text("请发送股票代码（如 600519）。行情和分析功能正在接入，结果仅供参考，不构成投资建议。")
-        return
-    if text == "频道入口":
-        await update.effective_message.reply_text("频道： https://t.me/jksjsjs6969")
-        return
-    if text == "视频解析":
-        await update.effective_message.reply_text("请发送公开的抖音或小红书链接。")
-        return
-    link = detect_platform(text)
-    if not link:
-        await update.effective_message.reply_text("请发送抖音或小红书的公开链接。")
-        return
-    if link.platform == "其他链接":
-        await update.effective_message.reply_text("暂不支持这个平台的链接。")
-        return
-    status = await update.effective_message.reply_text("正在尝试读取公开媒体，请稍候……")
-    try:
-        import yt_dlp
-        with tempfile.TemporaryDirectory(prefix="tg-media-") as tmp:
-            outtmpl = str(Path(tmp) / "%(id)s.%(ext)s")
-            opts = {
-                "quiet": True,
-                "no_warnings": True,
-                "noplaylist": True,
-                "restrictfilenames": True,
-                "outtmpl": outtmpl,
-                "format": "best[ext=mp4][filesize<45M]/best[filesize<45M]/best",
-                "max_filesize": 45 * 1024 * 1024,
-            }
-            def download() -> tuple[dict, list[Path]]:
-                with yt_dlp.YoutubeDL(opts) as ydl:
-                    info = ydl.extract_info(link.url, download=True)
-                    files = [p for p in Path(tmp).glob("*") if p.is_file()]
-                    return info, files
-            info, files = await asyncio.to_thread(download)
-            media = files[0] if files else None
-            if not media or not media.exists():
-                raise RuntimeError("no media file")
-            await status.delete()
-            await update.effective_message.reply_video(
-                video=media.open("rb"),
-                caption=f"{link.platform}公开内容（仅供你有权使用的内容）",
-                supports_streaming=True,
-            )
-            return
-    except Exception:
-        LOG.exception("Public media download failed")
-        await status.edit_text(
-            f"已识别平台：{link.platform}\n\n"
-            "这个链接暂时无法公开下载，可能需要登录、验证码或受平台限制。"
-        )
-    try:
-        metadata = await fetch_public_metadata(link.url)
-    except Exception:
-        LOG.exception("Public metadata fetch failed")
-        await update.effective_message.reply_text(
-            f"已识别平台：{link.platform}\n\n链接：{link.url}\n\n"
-            "暂时无法读取公开页面信息，可能是链接已失效或平台限制访问。"
-        )
-        return
-    lines = [f"已识别平台：{link.platform}", f"链接：{link.url}"]
-    if metadata.title:
-        lines.append(f"标题：{metadata.title[:200]}")
-    if metadata.description:
-        lines.append(f"简介：{metadata.description[:300]}")
-    if metadata.image:
-        lines.append(f"封面：{metadata.image}")
-    lines.append("\n当前仅读取公开元数据；媒体处理适配器仅面向你自己拥有或获授权的内容。")
-    await update.effective_message.reply_text("\n".join(lines))
+    await update.effective_message.reply_text("请发送 6 位 A 股股票代码，例如 600519。")
 
 
 def build_application() -> Application:
