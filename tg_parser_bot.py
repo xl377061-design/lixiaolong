@@ -11,6 +11,9 @@ import logging
 import os
 import re
 import threading
+import asyncio
+import tempfile
+from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from dataclasses import dataclass
 from typing import Optional
@@ -155,6 +158,42 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if link.platform == "其他链接":
         await update.effective_message.reply_text("暂不支持这个平台的链接。")
         return
+    status = await update.effective_message.reply_text("正在尝试读取公开媒体，请稍候……")
+    try:
+        import yt_dlp
+        with tempfile.TemporaryDirectory(prefix="tg-media-") as tmp:
+            outtmpl = str(Path(tmp) / "%(id)s.%(ext)s")
+            opts = {
+                "quiet": True,
+                "no_warnings": True,
+                "noplaylist": True,
+                "restrictfilenames": True,
+                "outtmpl": outtmpl,
+                "format": "best[ext=mp4][filesize<45M]/best[filesize<45M]/best",
+                "max_filesize": 45 * 1024 * 1024,
+            }
+            def download() -> tuple[dict, list[Path]]:
+                with yt_dlp.YoutubeDL(opts) as ydl:
+                    info = ydl.extract_info(link.url, download=True)
+                    files = [p for p in Path(tmp).glob("*") if p.is_file()]
+                    return info, files
+            info, files = await asyncio.to_thread(download)
+            media = files[0] if files else None
+            if not media or not media.exists():
+                raise RuntimeError("no media file")
+            await status.delete()
+            await update.effective_message.reply_video(
+                video=media.open("rb"),
+                caption=f"{link.platform}公开内容（仅供你有权使用的内容）",
+                supports_streaming=True,
+            )
+            return
+    except Exception:
+        LOG.exception("Public media download failed")
+        await status.edit_text(
+            f"已识别平台：{link.platform}\n\n"
+            "这个链接暂时无法公开下载，可能需要登录、验证码或受平台限制。"
+        )
     try:
         metadata = await fetch_public_metadata(link.url)
     except Exception:
