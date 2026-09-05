@@ -84,15 +84,45 @@ def fetch_stock_quote(code: str) -> str:
     change = price - previous
     pct = (change / previous * 100) if previous else 0.0
     trend = "偏强" if pct >= 1 else "偏弱" if pct <= -1 else "震荡"
+
+    # Use the same public history feed as the chart to produce a readable,
+    # deterministic narrative.  This deliberately does not invent company
+    # fundamentals or call an AI model.
+    history = _fetch_stock_history(symbol)
+    closes = [float(row[2]) for row in history]
+    if closes:
+        period_low, period_high = min(closes), max(closes)
+        ma5 = sum(closes[-5:]) / min(len(closes), 5)
+        ma20 = sum(closes[-20:]) / min(len(closes), 20)
+        position = (price - period_low) / (period_high - period_low) if period_high > period_low else 0.5
+        zone = "区间上沿" if position >= 0.67 else "区间下沿" if position <= 0.33 else "区间中部"
+        ma_text = "MA5 位于 MA20 上方，短线动能相对占优" if ma5 >= ma20 else "MA5 位于 MA20 下方，短线仍有整理压力"
+        outlook = (
+            f"后市重点观察能否放量突破 {period_high:.2f} 附近压力并延续强势；"
+            f"若回落跌破 {period_low:.2f} 附近支撑，则需留意趋势转弱。"
+        )
+        narrative = (
+            f"{name}（{digits}）当前处于{zone}，现价 {price:.2f} 元，较前收 {change:+.2f} 元（{pct:+.2f}%）。"
+            f"近 30 个交易日价格运行区间约为 {period_low:.2f}-{period_high:.2f} 元，{ma_text}，"
+            f"当前盘面状态为{trend}。{outlook}"
+        )
+    else:
+        narrative = f"{name}（{digits}）现价 {price:.2f} 元，较前收 {change:+.2f} 元（{pct:+.2f}%），当前盘面状态为{trend}。"
     return (
-        f"📈 {name}（{digits}）\n"
-        f"━━━━━━━━━━━━\n"
-        f"💰 现价：{price:.2f}\n"
-        f"📊 涨跌：{change:+.2f}（{pct:+.2f}%）\n"
-        f"🧭 状态：{trend}\n"
-        f"━━━━━━━━━━━━\n"
-        "⚠️ 数据来自公开行情，仅供参考，不构成投资建议。"
+        f"📊 {narrative}\n\n"
+        "以上为基于公开行情数据的规则化分析，未包含未经核实的基本面结论；"
+        "数据仅供参考，不构成投资建议。"
     )
+
+
+def _fetch_stock_history(symbol: str) -> list[list[str]]:
+    req = Request(
+        f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={symbol},day,,,30,qfq",
+        headers={"User-Agent": "Mozilla/5.0"},
+    )
+    data = json.loads(urlopen(req, timeout=10).read().decode("utf-8", errors="replace"))
+    rows = data.get("data", {}).get(symbol, {}).get("qfqday", [])
+    return rows
 
 
 def make_stock_chart(code: str) -> tuple[str, Path]:
@@ -107,12 +137,7 @@ def make_stock_chart(code: str) -> tuple[str, Path]:
     digits = match.group(1)
     market = "sh" if digits.startswith(("6", "68")) else "sz"
     symbol = market + digits
-    req = Request(
-        f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={symbol},day,,,30,qfq",
-        headers={"User-Agent": "Mozilla/5.0"},
-    )
-    data = json.loads(urlopen(req, timeout=10).read().decode("utf-8", errors="replace"))
-    rows = data.get("data", {}).get(symbol, {}).get("qfqday", [])
+    rows = _fetch_stock_history(symbol)
     if len(rows) < 5:
         raise RuntimeError("历史行情不足")
     dates = [r[0][5:] for r in rows]
