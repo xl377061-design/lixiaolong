@@ -83,7 +83,16 @@ def fetch_stock_quote(code: str) -> str:
     name, price, previous = fields[1], float(fields[3]), float(fields[4])
     change = price - previous
     pct = (change / previous * 100) if previous else 0.0
-    return f"{name}（{digits}）\n现价：{price:.2f}\n涨跌：{change:+.2f}（{pct:+.2f}%）\n\n数据来自公开行情，仅供参考，不构成投资建议。"
+    trend = "偏强" if pct >= 1 else "偏弱" if pct <= -1 else "震荡"
+    return (
+        f"📈 {name}（{digits}）\n"
+        f"━━━━━━━━━━━━\n"
+        f"💰 现价：{price:.2f}\n"
+        f"📊 涨跌：{change:+.2f}（{pct:+.2f}%）\n"
+        f"🧭 状态：{trend}\n"
+        f"━━━━━━━━━━━━\n"
+        "⚠️ 数据来自公开行情，仅供参考，不构成投资建议。"
+    )
 
 
 def make_stock_chart(code: str) -> tuple[str, Path]:
@@ -111,12 +120,15 @@ def make_stock_chart(code: str) -> tuple[str, Path]:
     ma20 = [sum(closes[max(0, i-19):i+1]) / min(i + 1, 20) for i in range(len(closes))]
     path = Path(tempfile.gettempdir()) / f"stock-{digits}.png"
     fig, ax = plt.subplots(figsize=(8, 4.5), dpi=140)
-    ax.plot(dates, closes, label="收盘", color="#2563eb", linewidth=2)
-    ax.plot(dates, ma5, label="MA5", color="#f59e0b", linewidth=1.3)
-    ax.plot(dates, ma20, label="MA20", color="#16a34a", linewidth=1.3)
-    ax.set_title(f"{digits} 近30日行情")
-    ax.grid(alpha=0.2)
-    ax.legend()
+    fig.patch.set_facecolor("#f8fafc")
+    ax.set_facecolor("#f8fafc")
+    ax.plot(dates, closes, label="Close", color="#2563eb", linewidth=2.2)
+    ax.plot(dates, ma5, label="MA5", color="#f59e0b", linewidth=1.4)
+    ax.plot(dates, ma20, label="MA20", color="#16a34a", linewidth=1.4)
+    ax.set_title(f"{digits} | 30D Price Trend", loc="left", fontweight="bold")
+    ax.grid(alpha=0.18, linestyle="--")
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.legend(frameon=False, ncol=3, loc="upper left")
     ax.tick_params(axis="x", rotation=45, labelsize=8)
     fig.tight_layout()
     fig.savefig(path)
