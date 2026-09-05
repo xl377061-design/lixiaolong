@@ -23,7 +23,7 @@ from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove, Update
-from telegram.constants import ChatMemberStatus
+from telegram.constants import ChatMemberStatus, ParseMode
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -258,10 +258,12 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 await context.bot.send_photo(
                     chat_id=required_channel(),
                     photo=channel_image,
-                    caption=quote,
-                    reply_markup=InlineKeyboardMarkup([
-                        [InlineKeyboardButton("📊 个股解析", url="https://t.me/xiaolongko_ai_bot?start=stock")]
-                    ]),
+                    caption=(
+                        f"{quote}\n\n"
+                        '<a href="https://t.me/xiaolongko_ai_bot?start=stock">'
+                        "📊 个股解析，请点击进入机器人</a>"
+                    ),
+                    parse_mode=ParseMode.HTML,
                 )
             except Exception:
                 LOG.exception("Failed to publish stock result to channel")
