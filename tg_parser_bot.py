@@ -21,7 +21,7 @@ from typing import Optional
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ChatMemberStatus
 from telegram.ext import (
     Application,
@@ -182,7 +182,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "欢迎使用 A 股个股解析。\n\n"
         "请发送 6 位股票代码，例如 600519。\n"
         "行情数据仅供参考，不构成投资建议。",
-        reply_markup=ReplyKeyboardRemove(),
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("📢 进入频道", url="https://t.me/jksjsjs6969")]
+        ]),
     )
 
 
@@ -208,6 +210,9 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             chart.unlink(missing_ok=True)
         except Exception:
             await update.effective_message.reply_text("暂时无法读取该股票行情，请检查代码或稍后再试。")
+        return
+    if text == "频道入口":
+        await update.effective_message.reply_text("你的频道： https://t.me/jksjsjs6969")
         return
     await update.effective_message.reply_text("请发送 6 位 A 股股票代码，例如 600519。")
 
