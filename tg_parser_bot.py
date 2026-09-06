@@ -168,7 +168,7 @@ def _fetch_stock_history(symbol: str, days: int = 30) -> list[list[str]]:
 
 
 def make_stock_chart(code: str) -> tuple[str, Path]:
-    """Create a simple 30-day closing-price chart from a public quote feed."""
+    """Create a dark, Chinese-labelled market chart from a public quote feed."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -179,7 +179,7 @@ def make_stock_chart(code: str) -> tuple[str, Path]:
     digits = match.group(1)
     market = "sh" if digits.startswith(("6", "68")) else "sz"
     symbol = market + digits
-    rows = _fetch_stock_history(symbol)
+    rows = _fetch_stock_history(symbol, 60)
     if len(rows) < 5:
         raise RuntimeError("历史行情不足")
     dates = [r[0][5:] for r in rows]
@@ -190,56 +190,71 @@ def make_stock_chart(code: str) -> tuple[str, Path]:
     volumes = [float(r[5]) for r in rows]
     ma5 = [sum(closes[max(0, i-4):i+1]) / min(i + 1, 5) for i in range(len(closes))]
     ma20 = [sum(closes[max(0, i-19):i+1]) / min(i + 1, 20) for i in range(len(closes))]
+    ma60 = [sum(closes[max(0, i-59):i+1]) / min(i + 1, 60) for i in range(len(closes))]
     path = Path(tempfile.gettempdir()) / f"stock-{digits}.png"
     # Prefer common CJK fonts when available so chart labels stay Chinese on
     # both Render Linux and local Windows environments.
     plt.rcParams["font.sans-serif"] = ["Noto Sans CJK SC", "WenQuanYi Zen Hei", "SimHei", "DejaVu Sans"]
     plt.rcParams["axes.unicode_minus"] = False
-    fig = plt.figure(figsize=(8.8, 5.9), dpi=140)
-    grid = fig.add_gridspec(2, 2, width_ratios=[3.5, 1.15], height_ratios=[3, 1],
-                            wspace=0.08, hspace=0.08)
+    fig = plt.figure(figsize=(10.2, 5.8), dpi=150)
+    grid = fig.add_gridspec(2, 2, width_ratios=[4.5, 1.25], height_ratios=[3.2, 1],
+                            wspace=0.06, hspace=0.05)
     ax = fig.add_subplot(grid[0, 0])
     vol_ax = fig.add_subplot(grid[1, 0], sharex=ax)
     chip_ax = fig.add_subplot(grid[:, 1], sharey=ax)
-    fig.patch.set_facecolor("#f8fafc")
-    ax.set_facecolor("#f8fafc")
+    background = "#050505"
+    grid_color = "#5b1f2a"
+    text_color = "#d7d7d7"
+    fig.patch.set_facecolor(background)
+    for panel in (ax, vol_ax, chip_ax):
+        panel.set_facecolor(background)
+        panel.tick_params(colors=text_color, labelsize=8)
+        for spine in panel.spines.values():
+            spine.set_color("#4b5563")
     for i, (op, cl, hi, lo) in enumerate(zip(opens, closes, highs, lows)):
-        color = "#dc2626" if cl >= op else "#16a34a"
-        ax.vlines(i, lo, hi, color=color, linewidth=1)
+        color = "#ff4d5a" if cl >= op else "#38d9e6"
+        ax.vlines(i, lo, hi, color=color, linewidth=0.85)
         ax.add_patch(Rectangle((i - 0.32, min(op, cl)), 0.64, max(abs(cl-op), 0.01),
-                               facecolor=color, edgecolor=color, alpha=0.9))
-    ax.plot(range(len(closes)), ma5, label="5日均线", color="#f59e0b", linewidth=1.4)
-    ax.plot(range(len(closes)), ma20, label="20日均线", color="#2563eb", linewidth=1.4)
-    support, resistance = min(closes), max(closes)
-    ax.axhline(resistance, color="#dc2626", linestyle="--", linewidth=1.0, label="压力位")
-    ax.axhline(support, color="#16a34a", linestyle="--", linewidth=1.0, label="支撑位")
+                               facecolor=color, edgecolor=color, alpha=0.95))
+    ax.plot(range(len(closes)), ma5, label="5日均线", color="#f5d90a", linewidth=1.15)
+    ax.plot(range(len(closes)), ma20, label="20日均线", color="#d84cff", linewidth=1.15)
+    ax.plot(range(len(closes)), ma60, label="60日均线", color="#4ade80", linewidth=1.2)
+    recent_closes = closes[-30:]
+    support, resistance = min(recent_closes), max(recent_closes)
+    current = closes[-1]
+    ax.axhline(resistance, color="#ff4d5a", linestyle="--", linewidth=0.9, alpha=0.8, label="压力位")
+    ax.axhline(support, color="#38d9e6", linestyle="--", linewidth=0.9, alpha=0.8, label="支撑位")
+    ax.axhline(current, color="#facc15", linestyle=":", linewidth=0.8, alpha=0.75)
     ax.annotate(f"压力位 {resistance:.2f}", xy=(len(closes) - 1, resistance),
-                xytext=(-6, 5), textcoords="offset points", ha="right", fontsize=8, color="#dc2626")
+                xytext=(-5, 5), textcoords="offset points", ha="right", fontsize=8, color="#ff6b75")
     ax.annotate(f"支撑位 {support:.2f}", xy=(len(closes) - 1, support),
-                xytext=(-6, 5), textcoords="offset points", ha="right", fontsize=8, color="#16a34a")
-    ax.set_title(f"{digits}｜30日K线", loc="left", fontweight="bold")
-    ax.grid(alpha=0.18, linestyle="--")
-    ax.spines[["top", "right"]].set_visible(False)
-    ax.legend(frameon=False, ncol=3, loc="upper left")
-    vol_ax.bar(range(len(volumes)), volumes, color="#94a3b8", width=0.65)
-    vol_ax.set_ylabel("成交量", fontsize=8)
-    vol_ax.grid(alpha=0.12, linestyle="--")
-    vol_ax.spines[["top", "right"]].set_visible(False)
+                xytext=(-5, 5), textcoords="offset points", ha="right", fontsize=8, color="#67e8f9")
+    ax.annotate(f"现价 {current:.2f}", xy=(len(closes) - 1, current),
+                xytext=(-5, -13), textcoords="offset points", ha="right", fontsize=8, color="#facc15")
+    ax.set_title(f"{digits}｜60日K线走势", loc="left", fontweight="bold", color="#f3f4f6", pad=10)
+    ax.grid(alpha=0.45, linestyle=":", color=grid_color)
+    legend = ax.legend(frameon=False, ncol=5, loc="upper left", fontsize=8)
+    for label in legend.get_texts():
+        label.set_color(text_color)
+    volume_colors = ["#ff4d5a" if cl >= op else "#38d9e6" for op, cl in zip(opens, closes)]
+    vol_ax.bar(range(len(volumes)), volumes, color=volume_colors, width=0.64, alpha=0.78)
+    vol_ax.set_ylabel("成交量", fontsize=8, color=text_color)
+    vol_ax.grid(alpha=0.35, linestyle=":", color=grid_color)
     # A rule-based chip-peak proxy: distribution of the last 30 closing prices.
     # It is not a broker's proprietary cost-distribution dataset.
-    chip_ax.hist(closes, bins=12, orientation="horizontal", color="#8b5cf6", alpha=0.75,
-                 edgecolor="white", linewidth=0.4)
-    chip_ax.axhline(support, color="#16a34a", linestyle="--", linewidth=0.9)
-    chip_ax.axhline(resistance, color="#dc2626", linestyle="--", linewidth=0.9)
-    chip_ax.set_title("筹码峰", fontsize=10, fontweight="bold")
-    chip_ax.set_xlabel("密集度", fontsize=8)
-    chip_ax.grid(axis="y", alpha=0.12, linestyle="--")
-    chip_ax.spines[["top", "right"]].set_visible(False)
+    chip_ax.hist(recent_closes, bins=12, orientation="horizontal", color="#facc15", alpha=0.68,
+                 edgecolor="#fef3c7", linewidth=0.35)
+    chip_ax.axhline(support, color="#38d9e6", linestyle="--", linewidth=0.9)
+    chip_ax.axhline(resistance, color="#ff4d5a", linestyle="--", linewidth=0.9)
+    chip_ax.axhline(current, color="#facc15", linestyle=":", linewidth=0.8)
+    chip_ax.set_title("近30日筹码峰", fontsize=10, fontweight="bold", color="#f3f4f6")
+    chip_ax.set_xlabel("价格密集度", fontsize=8, color=text_color)
+    chip_ax.grid(axis="y", alpha=0.35, linestyle=":", color=grid_color)
     chip_ax.tick_params(axis="y", labelleft=False)
     ax.set_xticks(range(0, len(dates), max(1, len(dates)//8)))
     ax.set_xticklabels([dates[i] for i in range(0, len(dates), max(1, len(dates)//8))], rotation=45, fontsize=8)
-    fig.tight_layout()
-    fig.savefig(path)
+    fig.subplots_adjust(left=0.07, right=0.98, bottom=0.10, top=0.91)
+    fig.savefig(path, facecolor=fig.get_facecolor(), bbox_inches="tight")
     plt.close(fig)
     return digits, path
 
