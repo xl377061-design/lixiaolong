@@ -49,16 +49,16 @@ STOCK_PROFILES = {
 # within the quote/history data we actually have instead of inventing news or
 # fundamentals.  Rotation keeps consecutive replies from looking copied.
 ANALYSIS_TEMPLATES = [
-    "最新价{price:.2f}元，较前收{change:+.2f}元（{pct:+.2f}%）。股价在近30日{low:.2f}-{high:.2f}元区间的{zone}，{ma_text}。目前先看{resistance:.2f}元压力能不能放量突破，回踩时{support:.2f}元附近能否守住，这两个位置比单日涨跌更重要。",
-    "现价{price:.2f}元，日内变动{change:+.2f}元（{pct:+.2f}%），位置处在近30日区间{low:.2f}-{high:.2f}元的{zone}。{ma_text}，短线仍以整理为主；上方{resistance:.2f}元是第一道压力，下方{support:.2f}元是当前防守位。",
-    "从最近30个交易日看，{name}股价大致运行在{low:.2f}-{high:.2f}元之间，当前报{price:.2f}元，较前收{change:+.2f}元（{pct:+.2f}%）。{ma_text}，盘面暂时没有走出明确方向，后面观察{resistance:.2f}元和{support:.2f}元的得失即可。",
-    "这只票目前在近30日{zone}运行，最新价{price:.2f}元，较前收{change:+.2f}元（{pct:+.2f}%）。{ma_text}。如果反弹靠近{resistance:.2f}元仍然放不出量，追高要谨慎；回落不破{support:.2f}元，短线还有反复的空间。",
-    "{name}当前报{price:.2f}元，近30日波动范围为{low:.2f}-{high:.2f}元，现价位于{zone}。今天较前收{change:+.2f}元（{pct:+.2f}%），{ma_text}。短线先按区间看待，站上{resistance:.2f}元再谈转强，跌破{support:.2f}元则要防止继续调整。",
-    "股价在{low:.2f}-{high:.2f}元区间来回整理后，当前来到{price:.2f}元，日内{change:+.2f}元（{pct:+.2f}%）。{ma_text}，{zone}暂未改变。后续能否走出行情，关键看{resistance:.2f}元压力和{support:.2f}元支撑，暂时不宜只凭一天的涨跌下结论。",
-    "最新价{price:.2f}元，较前收{change:+.2f}元（{pct:+.2f}%）。近30日高低点分别是{high:.2f}元和{low:.2f}元，现价处于{zone}；{ma_text}。若量能跟不上，{resistance:.2f}元附近仍会有抛压，回调先看{support:.2f}元承接。",
-    "从价格位置看，{name}还在近30日{low:.2f}-{high:.2f}元箱体内，现价{price:.2f}元，今日{change:+.2f}元（{pct:+.2f}%）。{ma_text}，短线偏{trend}。上破{resistance:.2f}元才算打开空间，失守{support:.2f}元则要把预期放低。",
-    "目前股价报{price:.2f}元，位于近30日区间的{zone}，区间低点{low:.2f}元、高点{high:.2f}元；较前收{change:+.2f}元（{pct:+.2f}%）。{ma_text}。操作上先观察支撑，不追着单日上涨买入，压力位{resistance:.2f}元能否消化是下一步看点。",
-    "{name}今日价格变化不大，现价{price:.2f}元，较前收{change:+.2f}元（{pct:+.2f}%）。结合近30日走势，股价仍处于{zone}，{ma_text}。短线以{support:.2f}元为防守、{resistance:.2f}元为突破参考，等方向走出来再做判断。",
+    "{name}近期量价配合还算清楚，{volume_text}。现价{price:.2f}元，处在近30日{zone}，{ma_text}，{ma60_text}。这类走势暂时不用盯着一天的涨跌，先看{support:.2f}元附近能否守稳；整理充分后，如能带量越过{resistance:.2f}元，短线空间才会真正打开。",
+    "{name}这段时间主要围绕区间反复消化，股价从低点{low:.2f}元运行到目前{price:.2f}元，位置来到{zone}。盘中{volume_text}，同时{ma_text}，{ma60_text}。眼下{resistance:.2f}元仍有压力，回踩{support:.2f}元不破，结构就没有明显走坏，耐心等方向选择即可。",
+    "从最近的走势看，{name}并不是单边运行，而是在{low:.2f}-{high:.2f}元之间来回换手。当前报{price:.2f}元，较前收{change:+.2f}元（{pct:+.2f}%），{volume_text}。均线方面，{ma_text}，{ma60_text}；短线先看{support:.2f}元承接，真正转强还得越过{resistance:.2f}元。",
+    "{name}目前的看点不在单日涨跌，而在量价节奏。近期{volume_text}，说明场内资金还在反复试探；现价{price:.2f}元位于近30日{zone}，{ma_text}，{ma60_text}。只要{support:.2f}元一带没有被有效跌破，仍可按整理看待，向上则留意{resistance:.2f}元附近的抛压。",
+    "{name}最新报{price:.2f}元，较前收{change:+.2f}元（{pct:+.2f}%）。近30日高低点为{high:.2f}元和{low:.2f}元，当前处在{zone}；{volume_text}，{ma_text}，{ma60_text}。走势暂时还在蓄势阶段，{support:.2f}元是短线防守位，突破{resistance:.2f}元时要看成交量是否同步跟上。",
+    "这只票近期在{low:.2f}-{high:.2f}元之间整理，现价{price:.2f}元，位置处于{zone}。从盘面细节看，{volume_text}，而且{ma_text}，{ma60_text}。目前多空还没有完全分出胜负，{support:.2f}元守住就还有修复机会；{resistance:.2f}元过不去，仍要防止冲高后再次回落。",
+    "{name}短线走的是边整理边换手的节奏，当前价格{price:.2f}元，日内{change:+.2f}元（{pct:+.2f}%）。近期{volume_text}，均线则表现为{ma_text}，{ma60_text}。接下来不妨把{support:.2f}元作为强弱分界，守住可继续观察反弹延续性，越过{resistance:.2f}元才算真正摆脱区间。",
+    "从技术位置看，{name}目前仍在近30日箱体内，现价{price:.2f}元，处于{zone}。量能方面{volume_text}，再结合{ma_text}、{ma60_text}，说明盘面仍有反复。短线回落先看{support:.2f}元附近有没有承接，向上试探{resistance:.2f}元时，则要防范无量冲高。",
+    "{name}近阶段的走势比较有节奏，{volume_text}。股价现报{price:.2f}元，较前收{change:+.2f}元（{pct:+.2f}%），位于近30日{zone}；{ma_text}，{ma60_text}。当前位置宜多看量价是否继续配合，{support:.2f}元不失守，整理结束后仍有再次试探{resistance:.2f}元的可能。",
+    "{name}当前没有走出明显的单边行情，价格仍在{low:.2f}-{high:.2f}元区间消化，最新价{price:.2f}元。盘中{volume_text}，{ma_text}，{ma60_text}。这里更适合等确认：回踩{support:.2f}元企稳，说明下方仍有承接；若后面放量突破{resistance:.2f}元，短线节奏才会进一步转强。",
 ]
 
 
@@ -111,19 +111,30 @@ def fetch_stock_quote(code: str) -> str:
     # Use the same public history feed as the chart to produce a readable,
     # deterministic narrative.  This deliberately does not invent company
     # fundamentals or call an AI model.
-    history = _fetch_stock_history(symbol)
-    closes = [float(row[2]) for row in history]
+    history = _fetch_stock_history(symbol, 90)
+    recent = history[-30:]
+    closes = [float(row[2]) for row in recent]
     if closes:
         period_low, period_high = min(closes), max(closes)
         ma5 = sum(closes[-5:]) / min(len(closes), 5)
         ma20 = sum(closes[-20:]) / min(len(closes), 20)
+        all_closes = [float(row[2]) for row in history]
+        ma60 = sum(all_closes[-60:]) / min(len(all_closes), 60)
+        ma60_text = "股价仍在60日线上方" if price >= ma60 else "股价尚未收复60日线"
+        recent_rows = history[-15:]
+        up_volumes = [float(row[5]) for row in recent_rows if float(row[2]) >= float(row[1])]
+        down_volumes = [float(row[5]) for row in recent_rows if float(row[2]) < float(row[1])]
+        up_avg = sum(up_volumes) / len(up_volumes) if up_volumes else 0.0
+        down_avg = sum(down_volumes) / len(down_volumes) if down_volumes else 0.0
+        if up_avg > down_avg * 1.15:
+            volume_text = "上涨时量能更活跃，回落时成交相对收敛"
+        elif down_avg > up_avg * 1.15:
+            volume_text = "回落时成交偏大，上方抛压还没有完全消化"
+        else:
+            volume_text = "成交量没有明显偏向，多空仍在拉锯"
         position = (price - period_low) / (period_high - period_low) if period_high > period_low else 0.5
         zone = "区间上沿" if position >= 0.67 else "区间下沿" if position <= 0.33 else "区间中部"
         ma_text = "MA5 位于 MA20 上方，短线动能相对占优" if ma5 >= ma20 else "MA5 位于 MA20 下方，短线仍有整理压力"
-        outlook = (
-            f"后市重点观察能否放量突破 {period_high:.2f} 附近压力并延续强势；"
-            f"若回落跌破 {period_low:.2f} 附近支撑，则需留意趋势转弱。"
-        )
         profile = STOCK_PROFILES.get(digits)
         industry = intro = ""
         if profile:
@@ -135,7 +146,7 @@ def fetch_stock_quote(code: str) -> str:
             name=name, price=price, change=change, pct=pct,
             low=period_low, high=period_high, zone=zone,
             ma_text=ma_text, resistance=period_high, support=period_low,
-            trend=trend,
+            trend=trend, volume_text=volume_text, ma60_text=ma60_text,
         )
         prefix = f"{name}（{digits}）"
         if profile:
@@ -146,9 +157,9 @@ def fetch_stock_quote(code: str) -> str:
     return f"📊 {narrative}"
 
 
-def _fetch_stock_history(symbol: str) -> list[list[str]]:
+def _fetch_stock_history(symbol: str, days: int = 30) -> list[list[str]]:
     req = Request(
-        f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={symbol},day,,,30,qfq",
+        f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={symbol},day,,,{days},qfq",
         headers={"User-Agent": "Mozilla/5.0"},
     )
     data = json.loads(urlopen(req, timeout=10).read().decode("utf-8", errors="replace"))
