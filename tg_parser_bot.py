@@ -49,16 +49,16 @@ STOCK_PROFILES = {
 # within the quote/history data we actually have instead of inventing news or
 # fundamentals.  Rotation keeps consecutive replies from looking copied.
 ANALYSIS_TEMPLATES = [
-    "{name}近期量价配合还算清楚，{volume_text}。现价{price:.2f}元，处在近30日{zone}，{ma_text}，{ma60_text}。这类走势暂时不用盯着一天的涨跌，先看{support:.2f}元附近能否守稳；整理充分后，如能带量越过{resistance:.2f}元，短线空间才会真正打开。",
-    "{name}这段时间主要围绕区间反复消化，股价从低点{low:.2f}元运行到目前{price:.2f}元，位置来到{zone}。盘中{volume_text}，同时{ma_text}，{ma60_text}。眼下{resistance:.2f}元仍有压力，回踩{support:.2f}元不破，结构就没有明显走坏，耐心等方向选择即可。",
-    "从最近的走势看，{name}并不是单边运行，而是在{low:.2f}-{high:.2f}元之间来回换手。当前报{price:.2f}元，较前收{change:+.2f}元（{pct:+.2f}%），{volume_text}。均线方面，{ma_text}，{ma60_text}；短线先看{support:.2f}元承接，真正转强还得越过{resistance:.2f}元。",
-    "{name}目前的看点不在单日涨跌，而在量价节奏。近期{volume_text}，说明场内资金还在反复试探；现价{price:.2f}元位于近30日{zone}，{ma_text}，{ma60_text}。只要{support:.2f}元一带没有被有效跌破，仍可按整理看待，向上则留意{resistance:.2f}元附近的抛压。",
-    "{name}最新报{price:.2f}元，较前收{change:+.2f}元（{pct:+.2f}%）。近30日高低点为{high:.2f}元和{low:.2f}元，当前处在{zone}；{volume_text}，{ma_text}，{ma60_text}。走势暂时还在蓄势阶段，{support:.2f}元是短线防守位，突破{resistance:.2f}元时要看成交量是否同步跟上。",
-    "这只票近期在{low:.2f}-{high:.2f}元之间整理，现价{price:.2f}元，位置处于{zone}。从盘面细节看，{volume_text}，而且{ma_text}，{ma60_text}。目前多空还没有完全分出胜负，{support:.2f}元守住就还有修复机会；{resistance:.2f}元过不去，仍要防止冲高后再次回落。",
-    "{name}短线走的是边整理边换手的节奏，当前价格{price:.2f}元，日内{change:+.2f}元（{pct:+.2f}%）。近期{volume_text}，均线则表现为{ma_text}，{ma60_text}。接下来不妨把{support:.2f}元作为强弱分界，守住可继续观察反弹延续性，越过{resistance:.2f}元才算真正摆脱区间。",
-    "从技术位置看，{name}目前仍在近30日箱体内，现价{price:.2f}元，处于{zone}。量能方面{volume_text}，再结合{ma_text}、{ma60_text}，说明盘面仍有反复。短线回落先看{support:.2f}元附近有没有承接，向上试探{resistance:.2f}元时，则要防范无量冲高。",
-    "{name}近阶段的走势比较有节奏，{volume_text}。股价现报{price:.2f}元，较前收{change:+.2f}元（{pct:+.2f}%），位于近30日{zone}；{ma_text}，{ma60_text}。当前位置宜多看量价是否继续配合，{support:.2f}元不失守，整理结束后仍有再次试探{resistance:.2f}元的可能。",
-    "{name}当前没有走出明显的单边行情，价格仍在{low:.2f}-{high:.2f}元区间消化，最新价{price:.2f}元。盘中{volume_text}，{ma_text}，{ma60_text}。这里更适合等确认：回踩{support:.2f}元企稳，说明下方仍有承接；若后面放量突破{resistance:.2f}元，短线节奏才会进一步转强。",
+    "{code}{name}：现价{price:.2f}元，较前收{change:+.2f}元（{pct:+.2f}%）。近30日股价在{low:.2f}-{high:.2f}元之间来回磨，目前处在{zone}。{volume_text}，{ma_text}，{ma60_text}。短线先看{support:.2f}元能不能守住，守住就还有抬轿的机会；上方{resistance:.2f}元要放量过去，没量还是容易冲高回落。",
+    "{name}这只票最近不是一路拉，也不是一路跌，更多是在区间里换手。最新价{price:.2f}元，{volume_text}；{ma_text}，{ma60_text}。当前位置属于近30日{zone}，下方{support:.2f}元是多头要守的地方，上方{resistance:.2f}元压力还在，先等它把方向走出来。",
+    "从近30日走势看，{name}股价由{low:.2f}元走到现在的{price:.2f}元，过程里有反复、有洗盘。{volume_text}，说明资金接力还不算顺畅；目前{ma_text}，{ma60_text}。回踩{support:.2f}元不破，短线仍有修复空间，真正转强要看{resistance:.2f}元能不能带量突破。",
+    "{name}当前报{price:.2f}元，今天{change:+.2f}元（{pct:+.2f}%），价格落在近30日区间的{zone}。盘面上{volume_text}，均线{ma_text}，{ma60_text}。这种位置不适合只看一根阳线或阴线，先盯住{support:.2f}元支撑；能放量越过{resistance:.2f}元，再谈后面的空间。",
+    "{code}{name}目前还在{low:.2f}-{high:.2f}元箱体里折腾，现价{price:.2f}元。{volume_text}，{ma_text}，{ma60_text}，短线节奏偏{trend}。只要{support:.2f}元附近承接还在，箱体就没有被打破；反弹到了{resistance:.2f}元一带，量能跟不上就要提防抛压。",
+    "这只票的量价关系比较有意思：{volume_text}。股价现在{price:.2f}元，处于近30日{zone}，{ma_text}，{ma60_text}。往下看{support:.2f}元，往上看{resistance:.2f}元，暂时就是这两个位置来回拉锯。等放量选出方向，再考虑后面的节奏。",
+    "{name}近期走的是边洗边整理的路子，股价没有脱离{low:.2f}-{high:.2f}元区间，最新价{price:.2f}元。{volume_text}，{ma_text}，{ma60_text}。短线只要不跌穿{support:.2f}元，盘面还有反复拉升的可能；但{resistance:.2f}元附近套牢盘不少，突破必须有量配合。",
+    "简单看一下{code}{name}：现价{price:.2f}元，较前收{change:+.2f}元（{pct:+.2f}%），近30日位置在{zone}。近期{volume_text}，{ma_text}，{ma60_text}。现在还谈不上单边行情，{support:.2f}元是短线底线，{resistance:.2f}元是上方关口，先守支撑、再看突破。",
+    "{name}这段行情有点像箱体里磨底，价格在{low:.2f}-{high:.2f}元之间反复，今天报{price:.2f}元。{volume_text}，均线方面{ma_text}，{ma60_text}。只要{support:.2f}元不被放量击穿，后面仍有抬头的可能；若冲到{resistance:.2f}元没有成交量，别把反弹当反转。",
+    "从盘面节奏看，{name}目前在近30日{zone}运行，最新价{price:.2f}元，{volume_text}。{ma_text}，{ma60_text}，短线多空仍在拉锯。下方先看{support:.2f}元能否稳住，上方{resistance:.2f}元能否放量站上；两个位置没有被有效突破前，继续震荡的概率更大。",
 ]
 
 
