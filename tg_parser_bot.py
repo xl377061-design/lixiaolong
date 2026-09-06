@@ -38,12 +38,28 @@ URL_RE = re.compile(r"https?://[^\s<>]+", re.IGNORECASE)
 STOCK_CODE_RE = re.compile(r"^(?:sh|sz)?(\d{6})$", re.IGNORECASE)
 ANALYSIS_VARIANT = 0
 STOCK_PROFILES = {
-    "300308": ("AI 算力与光模块龙头", "中际旭创作为全球光模块核心厂商，主营高速光收发模块，业务与全球算力基础设施及 AI 资本开支周期高度相关"),
-    "601179": ("特高压与电网设备龙头", "中国西电作为特高压及输配电设备核心厂商，主营变压器、组合电器及高压开关，业务与电网建设和电力扩容需求密切相关"),
-    "002436": ("半导体封装基板龙头", "兴森科技作为高端 PCB 及半导体封装基板厂商，主营高多层板与先进封装载板，业务与国产算力芯片封测及半导体周期相关"),
-    "600172": ("超硬材料与培育钻石龙头", "黄河旋风主营人造金刚石、超硬材料及培育钻石，业务覆盖工业精密加工、半导体散热及消费端培育钻石需求"),
-    "002935": ("时频器件与军工电子龙头", "天奥电子主营原子钟、晶体器件及时间同步系统，业务与国防信息化、北斗导航及卫星互联网建设相关"),
+    "300308": ("AI 算力与光模块", "公司主营高速光收发模块，订单表现主要看海外算力建设和 800G、1.6T 产品放量"),
+    "601179": ("特高压与电网设备", "公司主营变压器、组合电器和高压开关，业绩主要受电网投资、特高压项目进度和海外订单影响"),
+    "002436": ("半导体封装基板", "公司业务覆盖高多层 PCB 和先进封装载板，后续看产能爬坡、大客户认证及半导体景气度"),
+    "600172": ("超硬材料与培育钻石", "公司主营人造金刚石和超硬材料，当前更需要观察工业端需求及主业盈利修复情况"),
+    "002935": ("时频器件与军工电子", "公司主营原子钟、晶体器件和时间同步系统，订单变化与军工信息化、北斗及卫星通信需求有关"),
 }
+
+# Short, human-sounding technical comment templates.  These deliberately stay
+# within the quote/history data we actually have instead of inventing news or
+# fundamentals.  Rotation keeps consecutive replies from looking copied.
+ANALYSIS_TEMPLATES = [
+    "最新价{price:.2f}元，较前收{change:+.2f}元（{pct:+.2f}%）。股价在近30日{low:.2f}-{high:.2f}元区间的{zone}，{ma_text}。目前先看{resistance:.2f}元压力能不能放量突破，回踩时{support:.2f}元附近能否守住，这两个位置比单日涨跌更重要。",
+    "现价{price:.2f}元，日内变动{change:+.2f}元（{pct:+.2f}%），位置处在近30日区间{low:.2f}-{high:.2f}元的{zone}。{ma_text}，短线仍以整理为主；上方{resistance:.2f}元是第一道压力，下方{support:.2f}元是当前防守位。",
+    "从最近30个交易日看，{name}股价大致运行在{low:.2f}-{high:.2f}元之间，当前报{price:.2f}元，较前收{change:+.2f}元（{pct:+.2f}%）。{ma_text}，盘面暂时没有走出明确方向，后面观察{resistance:.2f}元和{support:.2f}元的得失即可。",
+    "这只票目前在近30日{zone}运行，最新价{price:.2f}元，较前收{change:+.2f}元（{pct:+.2f}%）。{ma_text}。如果反弹靠近{resistance:.2f}元仍然放不出量，追高要谨慎；回落不破{support:.2f}元，短线还有反复的空间。",
+    "{name}当前报{price:.2f}元，近30日波动范围为{low:.2f}-{high:.2f}元，现价位于{zone}。今天较前收{change:+.2f}元（{pct:+.2f}%），{ma_text}。短线先按区间看待，站上{resistance:.2f}元再谈转强，跌破{support:.2f}元则要防止继续调整。",
+    "股价在{low:.2f}-{high:.2f}元区间来回整理后，当前来到{price:.2f}元，日内{change:+.2f}元（{pct:+.2f}%）。{ma_text}，{zone}暂未改变。后续能否走出行情，关键看{resistance:.2f}元压力和{support:.2f}元支撑，暂时不宜只凭一天的涨跌下结论。",
+    "最新价{price:.2f}元，较前收{change:+.2f}元（{pct:+.2f}%）。近30日高低点分别是{high:.2f}元和{low:.2f}元，现价处于{zone}；{ma_text}。若量能跟不上，{resistance:.2f}元附近仍会有抛压，回调先看{support:.2f}元承接。",
+    "从价格位置看，{name}还在近30日{low:.2f}-{high:.2f}元箱体内，现价{price:.2f}元，今日{change:+.2f}元（{pct:+.2f}%）。{ma_text}，短线偏{trend}。上破{resistance:.2f}元才算打开空间，失守{support:.2f}元则要把预期放低。",
+    "目前股价报{price:.2f}元，位于近30日区间的{zone}，区间低点{low:.2f}元、高点{high:.2f}元；较前收{change:+.2f}元（{pct:+.2f}%）。{ma_text}。操作上先观察支撑，不追着单日上涨买入，压力位{resistance:.2f}元能否消化是下一步看点。",
+    "{name}今日价格变化不大，现价{price:.2f}元，较前收{change:+.2f}元（{pct:+.2f}%）。结合近30日走势，股价仍处于{zone}，{ma_text}。短线以{support:.2f}元为防守、{resistance:.2f}元为突破参考，等方向走出来再做判断。",
+]
 
 
 @dataclass(frozen=True)
@@ -109,33 +125,22 @@ def fetch_stock_quote(code: str) -> str:
             f"若回落跌破 {period_low:.2f} 附近支撑，则需留意趋势转弱。"
         )
         profile = STOCK_PROFILES.get(digits)
+        industry = intro = ""
         if profile:
             industry, intro = profile
-            narrative = (
-                f"{name}（{digits}）｜{industry}。{intro}。"
-                f"从当前盘面看，股价处于近30日{zone}，现价 {price:.2f} 元，较前收 {change:+.2f} 元（{pct:+.2f}%）。"
-                f"近30个交易日运行区间约为 {period_low:.2f}-{period_high:.2f} 元，{ma_text}，整体呈{trend}特征。"
-                f"短期需关注前期套牢筹码的消化和成交量配合，{outlook}"
-            )
-        else:
-            templates = [
-            (f"{name}（{digits}）目前运行在近30日{zone}，现价 {price:.2f} 元，较前收 {change:+.2f} 元（{pct:+.2f}%）。"
-             f"近30个交易日价格区间约为 {period_low:.2f}-{period_high:.2f} 元，{ma_text}，盘面整体呈{trend}特征。{outlook}"),
-            (f"从技术面看，{name}（{digits}）现价 {price:.2f} 元，日内变动 {change:+.2f} 元（{pct:+.2f}%），"
-             f"股价位于近30日 {period_low:.2f}-{period_high:.2f} 元波动区间的{zone}。目前{ma_text}，短线节奏偏{trend}，"
-             f"后续应重点观察 {period_high:.2f} 压力与 {period_low:.2f} 支撑的得失。"),
-            (f"{name}（{digits}）最新报价 {price:.2f} 元，较前收{change:+.2f} 元，涨跌幅 {pct:+.2f}%。"
-             f"结合近30日走势，价格高低点约为 {period_high:.2f}/{period_low:.2f} 元，当前处于{zone}；{ma_text}。"
-             f"若后续放量站稳 {period_high:.2f} 元上方，趋势有望延续；反之跌破 {period_low:.2f} 元需防范转弱。"),
-            (f"{name}（{digits}）当前处于{trend}状态，现价 {price:.2f} 元，单日涨跌 {change:+.2f} 元（{pct:+.2f}%）。"
-             f"近30个交易日运行范围为 {period_low:.2f}-{period_high:.2f} 元，现价位于{zone}，{ma_text}。"
-             f"短线不宜只看单日涨跌，后续关键在于支撑 {period_low:.2f} 元能否守住，以及能否有效消化 {period_high:.2f} 元附近压力。"),
-            ]
-            # Rotate through the templates so consecutive requests never appear
-            # to use the same wording (random choice could repeat by chance).
-            global ANALYSIS_VARIANT
-            narrative = templates[ANALYSIS_VARIANT % len(templates)]
-            ANALYSIS_VARIANT += 1
+        global ANALYSIS_VARIANT
+        template = ANALYSIS_TEMPLATES[ANALYSIS_VARIANT % len(ANALYSIS_TEMPLATES)]
+        ANALYSIS_VARIANT += 1
+        body = template.format(
+            name=name, price=price, change=change, pct=pct,
+            low=period_low, high=period_high, zone=zone,
+            ma_text=ma_text, resistance=period_high, support=period_low,
+            trend=trend,
+        )
+        prefix = f"{name}（{digits}）"
+        if profile:
+            prefix += f"｜{industry}。{intro}。"
+        narrative = prefix + body
     else:
         narrative = f"{name}（{digits}）现价 {price:.2f} 元，较前收 {change:+.2f} 元（{pct:+.2f}%），当前盘面状态为{trend}。"
     return f"📊 {narrative}"
