@@ -36,6 +36,13 @@ from telegram.ext import (
 from content_parsers import fetch_public_metadata
 
 LOG = logging.getLogger("tg-parser-bot")
+USER_REQUESTS: dict[int, list[float]] = {}
+INVALID_REQUESTS: dict[int, list[float]] = {}
+STOCK_RESULT_CACHE: dict[tuple[str, float | None], tuple[float, str, bytes, str]] = {}
+UPSTREAM_FAILURES: list[float] = []
+UPSTREAM_BLOCK_UNTIL = 0.0
+IMAGE_SEMAPHORE = asyncio.Semaphore(3)
+RESULT_CACHE_TTL = 30.0
 URL_RE = re.compile(r"https?://[^\s<>]+", re.IGNORECASE)
 STOCK_CODE_RE = re.compile(r"^(?:sh|sz)?(\d{6})$", re.IGNORECASE)
 STOCK_REQUEST_RE = re.compile(r"(?<!\d)(?:sh|sz)?(\d{6})(?!\d)", re.IGNORECASE)
@@ -125,12 +132,22 @@ ST_ANALYSIS_TEMPLATES = [
 
 def _read_url(req: Request, timeout: float = 10, attempts: int = 2) -> bytes:
     """Read a public endpoint with one short retry for transient failures."""
+    global UPSTREAM_BLOCK_UNTIL
+    now = time.time()
+    if now < UPSTREAM_BLOCK_UNTIL:
+        raise RuntimeError("行情接口暂时熔断")
     last_error: Exception | None = None
     for attempt in range(attempts):
         try:
             return urlopen(req, timeout=timeout).read()
         except Exception as exc:  # network providers can raise varied errors
             last_error = exc
+            UPSTREAM_FAILURES.append(time.time())
+            cutoff = time.time() - 60
+            UPSTREAM_FAILURES[:] = [t for t in UPSTREAM_FAILURES if t >= cutoff]
+            if len(UPSTREAM_FAILURES) >= 5:
+                UPSTREAM_BLOCK_UNTIL = time.time() + 60
+                LOG.warning("Upstream circuit opened for 60s after repeated failures")
             if attempt + 1 < attempts:
                 time.sleep(0.35 * (attempt + 1))
     assert last_error is not None
@@ -497,8 +514,67 @@ async def check_membership(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         await query.answer("还没有检测到关注，请先加入频道。", show_alert=True)
 
 
+def _admin_user_ids() -> set[int]:
+    raw = os.getenv("ADMIN_USER_IDS", "")
+    return {int(value.strip()) for value in raw.split(",") if value.strip().isdigit()}
+
+
+def _rate_limit_message(user_id: int) -> str | None:
+    """Return a cooldown message, or None when this request is allowed."""
+    if user_id in _admin_user_ids():
+        return None
+    now = time.time()
+    recent = [t for t in USER_REQUESTS.get(user_id, []) if now - t < 600]
+    if recent and now - recent[-1] < 10:
+        return "你操作太快了，10秒后再试。"
+    if len([t for t in recent if now - t < 60]) >= 5:
+        return "你这一分钟请求有点多，稍等一下再解析。"
+    if len(recent) >= 20:
+        return "请求次数达到临时上限，稍后再来。"
+    recent.append(now)
+    USER_REQUESTS[user_id] = recent
+    return None
+
+
+def _record_invalid_request(user_id: int) -> str | None:
+    if user_id in _admin_user_ids():
+        return None
+    now = time.time()
+    recent = [t for t in INVALID_REQUESTS.get(user_id, []) if now - t < 600]
+    recent.append(now)
+    INVALID_REQUESTS[user_id] = recent
+    if len([t for t in recent if now - t < 60]) >= 3:
+        return "连续几次都没识别到股票，先停一会儿，稍后再试。"
+    return None
+
+
+def _cached_result(code: str, cost: float | None) -> tuple[str, bytes, str] | None:
+    key = (code, cost)
+    cached = STOCK_RESULT_CACHE.get(key)
+    if not cached:
+        return None
+    created, quote, image_bytes, digits = cached
+    if time.time() - created > RESULT_CACHE_TTL:
+        STOCK_RESULT_CACHE.pop(key, None)
+        return None
+    return quote, image_bytes, digits
+
+
+def _store_result(code: str, cost: float | None, quote: str, image_bytes: bytes, digits: str) -> None:
+    # Keep the cache bounded even if the bot is busy for a long time.
+    if len(STOCK_RESULT_CACHE) >= 100:
+        oldest = min(STOCK_RESULT_CACHE, key=lambda key: STOCK_RESULT_CACHE[key][0])
+        STOCK_RESULT_CACHE.pop(oldest, None)
+    STOCK_RESULT_CACHE[(code, cost)] = (time.time(), quote, image_bytes, digits)
+
+
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not await require_membership(update, context):
+        return
+    user_id = update.effective_user.id if update.effective_user else 0
+    limited = _rate_limit_message(user_id)
+    if limited:
+        await update.effective_message.reply_text(limited)
         return
     text = (update.effective_message.text or "").strip()
     requested_code, cost = parse_stock_request(text)
@@ -511,6 +587,11 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             LOG.exception("Stock name lookup failed")
     if requested_code:
         request_id = uuid.uuid4().hex[:8]
+        cached = _cached_result(requested_code, cost)
+        if cached:
+            cached_quote, cached_image, _ = cached
+            await update.effective_message.reply_photo(photo=io.BytesIO(cached_image), caption=cached_quote)
+            return
         chart = None
         try:
             quote = await asyncio.to_thread(fetch_stock_quote, requested_code, cost)
@@ -521,7 +602,15 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             )
             return
         try:
-            digits, chart = await asyncio.to_thread(make_stock_chart, requested_code, cost)
+            try:
+                await asyncio.wait_for(IMAGE_SEMAPHORE.acquire(), timeout=1.5)
+            except asyncio.TimeoutError:
+                await update.effective_message.reply_text("现在解析的人有点多，等几秒再试。")
+                return
+            try:
+                digits, chart = await asyncio.to_thread(make_stock_chart, requested_code, cost)
+            finally:
+                IMAGE_SEMAPHORE.release()
             image_bytes = chart.read_bytes()
         except Exception:
             LOG.exception("Chart generation failed request_id=%s input=%r code=%s", request_id, text, requested_code)
@@ -534,6 +623,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 photo=io.BytesIO(image_bytes),
                 caption=quote,
             )
+            _store_result(requested_code, cost, quote, image_bytes, digits)
             # Republish the result to the owner's channel.  A channel failure
             # must not hide the result from the user who requested it.
             try:
@@ -563,8 +653,10 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if text == "频道入口":
         await update.effective_message.reply_text("你的频道： https://t.me/jksjsjs6969")
         return
+    invalid_notice = _record_invalid_request(user_id)
     await update.effective_message.reply_text(
-        "请发送股票代码，例如 600519。\n"
+        invalid_notice or
+        "请发送股票代码或股票名称，例如 600519、贵州茅台。\n"
         "也可以附上成本价：600519 成本价 120。"
     )
 
