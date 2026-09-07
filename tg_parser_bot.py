@@ -13,6 +13,8 @@ import re
 import asyncio
 import io
 import tempfile
+import time
+import uuid
 from pathlib import Path
 import json
 from dataclasses import dataclass
@@ -37,7 +39,7 @@ LOG = logging.getLogger("tg-parser-bot")
 URL_RE = re.compile(r"https?://[^\s<>]+", re.IGNORECASE)
 STOCK_CODE_RE = re.compile(r"^(?:sh|sz)?(\d{6})$", re.IGNORECASE)
 STOCK_REQUEST_RE = re.compile(r"(?<!\d)(?:sh|sz)?(\d{6})(?!\d)", re.IGNORECASE)
-COST_RE = re.compile(r"(?:成本价|成本|持仓价|买入价)\s*[:：=]?\s*(\d+(?:\.\d+)?)", re.IGNORECASE)
+COST_RE = re.compile(r"(?:成本价格|成本价|成本|持仓价|买入价)\s*[:：=]?\s*(\d+(?:\.\d+)?)", re.IGNORECASE)
 ANALYSIS_VARIANT = 0
 STOCK_PROFILES = {
     "300308": ("AI 算力与光模块", "公司主营高速光收发模块，订单表现主要看海外算力建设和 800G、1.6T 产品放量"),
@@ -58,7 +60,7 @@ ANALYSIS_TEMPLATES = [
     "{code}{name}目前还在{low:.2f}-{high:.2f}元箱体里折腾，现价{price:.2f}元。{volume_text}，{ma_text}，{ma60_text}，短线节奏偏{trend}。只要{support:.2f}元附近承接还在，箱体就没有被打破；反弹到了{resistance:.2f}元一带，量能跟不上就要提防抛压。",
     "这只票的量价关系比较有意思：{volume_text}。股价现在{price:.2f}元，处于近30日{zone}，{ma_text}，{ma60_text}。往下看{support:.2f}元，往上看{resistance:.2f}元，暂时就是这两个位置来回拉锯。等放量选出方向，再考虑后面的节奏。",
     "{name}近期走的是边洗边整理的路子，股价没有脱离{low:.2f}-{high:.2f}元区间，最新价{price:.2f}元。{volume_text}，{ma_text}，{ma60_text}。短线只要不跌穿{support:.2f}元，盘面还有反复拉升的可能；但{resistance:.2f}元附近套牢盘不少，突破必须有量配合。",
-    "简单看一下{code}{name}：现价{price:.2f}元，较前收{change:+.2f}元（{pct:+.2f}%），近30日位置在{zone}。近期{volume_text}，{ma_text}，{ma60_text}。现在还谈不上单边行情，{support:.2f}元是短线底线，{resistance:.2f}元是上方关口，先守支撑、再看突破。",
+    "简单看一下{name}（{code}）：现价{price:.2f}元，较前收{change:+.2f}元（{pct:+.2f}%），近30日位置在{zone}。近期{volume_text}，{ma_text}，{ma60_text}。现在还谈不上单边行情，{support:.2f}元是短线底线，{resistance:.2f}元是上方关口，先守支撑、再看突破。",
     "{name}这段行情有点像箱体里磨底，价格在{low:.2f}-{high:.2f}元之间反复，今天报{price:.2f}元。{volume_text}，均线方面{ma_text}，{ma60_text}。只要{support:.2f}元不被放量击穿，后面仍有抬头的可能；若冲到{resistance:.2f}元没有成交量，别把反弹当反转。",
     "从盘面节奏看，{name}目前在近30日{zone}运行，最新价{price:.2f}元，{volume_text}。{ma_text}，{ma60_text}，短线多空仍在拉锯。下方先看{support:.2f}元能否稳住，上方{resistance:.2f}元能否放量站上；两个位置没有被有效突破前，继续震荡的概率更大。",
     "{name}近期量价配合还算清楚，{volume_text}。现价{price:.2f}元，处在近30日{zone}，{ma_text}，{ma60_text}。这类走势暂时不用盯着一天的涨跌，先看{support:.2f}元附近能否守稳；整理充分后，如能带量越过{resistance:.2f}元，短线空间才会真正打开。",
@@ -121,6 +123,20 @@ ST_ANALYSIS_TEMPLATES = [
 ]
 
 
+def _read_url(req: Request, timeout: float = 10, attempts: int = 2) -> bytes:
+    """Read a public endpoint with one short retry for transient failures."""
+    last_error: Exception | None = None
+    for attempt in range(attempts):
+        try:
+            return urlopen(req, timeout=timeout).read()
+        except Exception as exc:  # network providers can raise varied errors
+            last_error = exc
+            if attempt + 1 < attempts:
+                time.sleep(0.35 * (attempt + 1))
+    assert last_error is not None
+    raise last_error
+
+
 @dataclass(frozen=True)
 class PlatformLink:
     platform: str
@@ -174,7 +190,7 @@ def parse_stock_request(text: str) -> tuple[str | None, float | None]:
 
 def resolve_stock_name(text: str) -> str | None:
     """Resolve a Chinese A-share name through Tencent's public search hint."""
-    query = re.sub(r"(?:解票|分析|看看|查询|帮我|请|成本价|成本|持仓价|买入价)", "", text or "")
+    query = re.sub(r"(?:解票|分析|看看|查询|帮我|请|成本价格|成本价|成本|持仓价|买入价)", "", text or "")
     query = re.sub(r"\d+(?:\.\d+)?", "", query).strip(" ：:，,。")
     if not query:
         return None
@@ -182,7 +198,7 @@ def resolve_stock_name(text: str) -> str | None:
         f"https://smartbox.gtimg.cn/s3/?q={quote(query)}&t=all",
         headers={"User-Agent": "Mozilla/5.0"},
     )
-    raw = urlopen(req, timeout=8).read().decode("utf-8", errors="replace")
+    raw = _read_url(req, timeout=8).decode("utf-8", errors="replace")
     payload = raw.split('v_hint="', 1)[-1].rsplit('"', 1)[0]
     candidates: list[tuple[str, str]] = []
     for item in payload.split("^"):
@@ -204,7 +220,7 @@ def fetch_stock_quote(code: str, cost: float | None = None) -> str:
     market = "sh" if digits.startswith(("6", "68")) else "sz"
     symbol = market + digits
     req = Request(f"https://qt.gtimg.cn/q={symbol}", headers={"User-Agent": "Mozilla/5.0"})
-    raw = urlopen(req, timeout=10).read().decode("gbk", errors="replace")
+    raw = _read_url(req, timeout=10).decode("gbk", errors="replace")
     payload = raw.split('="', 1)[-1].rsplit('"', 1)[0]
     fields = payload.split("~")
     if len(fields) < 6 or not fields[1]:
@@ -220,6 +236,8 @@ def fetch_stock_quote(code: str, cost: float | None = None) -> str:
     history = _fetch_stock_history(symbol, 90)
     recent = history[-30:]
     closes = [float(row[2]) for row in recent]
+    support_level = price
+    resistance_level = price
     if closes:
         period_low, period_high = min(closes), max(closes)
         ma5 = sum(closes[-5:]) / min(len(closes), 5)
@@ -239,6 +257,7 @@ def fetch_stock_quote(code: str, cost: float | None = None) -> str:
         else:
             volume_text = "成交量没有明显偏向，多空仍在拉锯"
         position = (price - period_low) / (period_high - period_low) if period_high > period_low else 0.5
+        support_level, resistance_level = period_low, period_high
         zone = "区间上沿" if position >= 0.67 else "区间下沿" if position <= 0.33 else "区间中部"
         ma_text = "MA5 位于 MA20 上方，短线动能相对占优" if ma5 >= ma20 else "MA5 位于 MA20 下方，短线仍有整理压力"
         profile = STOCK_PROFILES.get(digits)
@@ -274,13 +293,19 @@ def fetch_stock_quote(code: str, cost: float | None = None) -> str:
     if cost is not None and cost > 0:
         profit = price - cost
         profit_pct = profit / cost * 100
-        if profit > 0.0001:
-            cost_text = f"持仓成本{cost:.2f}元，目前浮盈{profit:.2f}元（{profit_pct:+.2f}%）"
-        elif profit < -0.0001:
-            cost_text = f"持仓成本{cost:.2f}元，目前浮亏{abs(profit):.2f}元（{profit_pct:+.2f}%）"
+        if profit_pct >= 3:
+            if price >= resistance_level * 0.97:
+                advice = f"已经有利润，但上方{resistance_level:.2f}元附近有压力，先别一涨就上头，冲不过去可以先收一部分，成本{cost:.2f}元当作自己的防守线。"
+            else:
+                advice = f"目前还在盈利区间，走势{trend}，先看{resistance_level:.2f}元能不能放量过去，别让到手的利润又坐回去。"
+        elif profit_pct <= -3:
+            if price <= support_level * 1.04:
+                advice = f"现在离成本还有一段，股价已经靠近{support_level:.2f}元附近，先看这里能不能止住，别急着补，也别一味硬扛。"
+            else:
+                advice = f"现在离成本还有一段，下方{support_level:.2f}元才是先要观察的位置，支撑没站稳前，别急着摊平。"
         else:
-            cost_text = f"持仓成本{cost:.2f}元，目前接近成本线"
-        cost_text += f"。回本先看{cost:.2f}元附近能否重新站稳，实际盈亏还要扣除手续费和税费。"
+            advice = f"现价和成本差得不多，这票有点磨人，先看{support_level:.2f}元和{resistance_level:.2f}元这两个位置，别为几个点来回折腾。"
+        cost_text = f"你的成本是{cost:.2f}元，当前{('浮盈' if profit >= 0 else '浮亏')}{abs(profit):.2f}元（{profit_pct:+.2f}%）。{advice}"
         narrative += " " + cost_text
     return f"📊 {narrative}"
 
@@ -290,7 +315,7 @@ def _fetch_stock_history(symbol: str, days: int = 30) -> list[list[str]]:
         f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={symbol},day,,,{days},qfq",
         headers={"User-Agent": "Mozilla/5.0"},
     )
-    data = json.loads(urlopen(req, timeout=10).read().decode("utf-8", errors="replace"))
+    data = json.loads(_read_url(req, timeout=10).decode("utf-8", errors="replace"))
     rows = data.get("data", {}).get(symbol, {}).get("qfqday", [])
     return rows
 
@@ -300,6 +325,7 @@ def make_stock_chart(code: str, cost: float | None = None) -> tuple[str, Path]:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+    from matplotlib import font_manager
     from matplotlib.patches import Rectangle
     match = STOCK_CODE_RE.fullmatch(code.strip())
     if not match:
@@ -320,9 +346,15 @@ def make_stock_chart(code: str, cost: float | None = None) -> tuple[str, Path]:
     ma20 = [sum(closes[max(0, i-19):i+1]) / min(i + 1, 20) for i in range(len(closes))]
     ma60 = [sum(closes[max(0, i-59):i+1]) / min(i + 1, 60) for i in range(len(closes))]
     path = Path(tempfile.gettempdir()) / f"stock-{digits}.png"
-    # Prefer common CJK fonts when available so chart labels stay Chinese on
-    # both Render Linux and local Windows environments.
-    plt.rcParams["font.sans-serif"] = ["Noto Sans CJK SC", "WenQuanYi Zen Hei", "SimHei", "DejaVu Sans"]
+    # Bundle an open-source CJK font because Render's base image may not have
+    # any Chinese font installed; otherwise labels become tofu squares.
+    bundled_font = Path(__file__).resolve().parent / "assets" / "NotoSansCJKsc-Regular.otf"
+    if bundled_font.exists():
+        font_manager.fontManager.addfont(str(bundled_font))
+        cjk_name = font_manager.FontProperties(fname=str(bundled_font)).get_name()
+        plt.rcParams["font.sans-serif"] = [cjk_name, "DejaVu Sans"]
+    else:
+        plt.rcParams["font.sans-serif"] = ["Noto Sans CJK SC", "WenQuanYi Zen Hei", "SimHei", "DejaVu Sans"]
     plt.rcParams["axes.unicode_minus"] = False
     fig = plt.figure(figsize=(10.8, 6.3), dpi=160)
     grid = fig.add_gridspec(2, 2, width_ratios=[4.5, 1.25], height_ratios=[3.2, 1],
@@ -471,10 +503,26 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         except Exception:
             LOG.exception("Stock name lookup failed")
     if requested_code:
+        request_id = uuid.uuid4().hex[:8]
+        chart = None
         try:
             quote = await asyncio.to_thread(fetch_stock_quote, requested_code, cost)
+        except Exception:
+            LOG.exception("Quote lookup failed request_id=%s input=%r code=%s", request_id, text, requested_code)
+            await update.effective_message.reply_text(
+                f"行情接口这次没响应，已经自动重试。请稍后再发一次；反馈码：{request_id}"
+            )
+            return
+        try:
             digits, chart = await asyncio.to_thread(make_stock_chart, requested_code, cost)
             image_bytes = chart.read_bytes()
+        except Exception:
+            LOG.exception("Chart generation failed request_id=%s input=%r code=%s", request_id, text, requested_code)
+            await update.effective_message.reply_text(
+                f"{quote}\n\n图表这次没生成出来，先给你文字解析。稍后重试即可；反馈码：{request_id}"
+            )
+            return
+        try:
             await update.effective_message.reply_photo(
                 photo=io.BytesIO(image_bytes),
                 caption=quote,
@@ -495,10 +543,15 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                     parse_mode=ParseMode.HTML,
                 )
             except Exception:
-                LOG.exception("Failed to publish stock result to channel")
-            chart.unlink(missing_ok=True)
+                LOG.exception("Failed to publish stock result request_id=%s", request_id)
         except Exception:
-            await update.effective_message.reply_text("暂时无法读取该股票行情，请检查代码或稍后再试。")
+            LOG.exception("Telegram photo send failed request_id=%s", request_id)
+            await update.effective_message.reply_text(
+                f"文字解析已经完成，但图片发送失败。稍后重试即可；反馈码：{request_id}\n\n{quote}"
+            )
+        finally:
+            if chart is not None:
+                chart.unlink(missing_ok=True)
         return
     if text == "频道入口":
         await update.effective_message.reply_text("你的频道： https://t.me/jksjsjs6969")
