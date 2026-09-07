@@ -265,9 +265,10 @@ def fetch_stock_quote(code: str, cost: float | None = None) -> str:
         if profile:
             industry, intro = profile
         global ANALYSIS_VARIANT
+        variant_index = ANALYSIS_VARIANT
         risk_stock = "ST" in name.upper() or "退市" in name or "暂停" in name
-        template = (ST_ANALYSIS_TEMPLATES[ANALYSIS_VARIANT % len(ST_ANALYSIS_TEMPLATES)]
-                    if risk_stock else ANALYSIS_TEMPLATES[ANALYSIS_VARIANT % len(ANALYSIS_TEMPLATES)])
+        template = (ST_ANALYSIS_TEMPLATES[variant_index % len(ST_ANALYSIS_TEMPLATES)]
+                    if risk_stock else ANALYSIS_TEMPLATES[variant_index % len(ANALYSIS_TEMPLATES)])
         ANALYSIS_VARIANT += 1
         body = template.format(
             code=digits, name=name, price=price, change=change, pct=pct,
@@ -287,6 +288,12 @@ def fetch_stock_quote(code: str, cost: float | None = None) -> str:
             prefix += f"｜{industry}。{intro}。"
         elif risk_stock:
             prefix = f"{name}（{digits}）："
+        elif variant_index % 5 in {1, 4}:
+            # Roughly two out of every ten ordinary replies get a natural
+            # spoken opener; keep it out of ST/退市 warnings.
+            body = "该股，" + body
+        if profile and variant_index % 5 in {1, 4}:
+            body = "该股，" + body
         narrative = prefix + body
     else:
         narrative = f"{name}（{digits}）现价 {price:.2f} 元，较前收 {change:+.2f} 元（{pct:+.2f}%），当前盘面状态为{trend}。"
