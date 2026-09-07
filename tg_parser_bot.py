@@ -308,9 +308,9 @@ def fetch_stock_quote(code: str, cost: float | None = None) -> str:
         elif variant_index % 5 in {1, 4}:
             # Roughly two out of every ten ordinary replies get a natural
             # spoken opener; keep it out of ST/退市 warnings.
-            body = "该股，" + body
+            body = _add_stock_opener(body, name, digits)
         if profile and variant_index % 5 in {1, 4}:
-            body = "该股，" + body
+            body = _add_stock_opener(body, name, digits)
         narrative = prefix + body
     else:
         narrative = f"{name}（{digits}）现价 {price:.2f} 元，较前收 {change:+.2f} 元（{pct:+.2f}%），当前盘面状态为{trend}。"
@@ -493,8 +493,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     await update.effective_message.reply_text(
         "欢迎使用 A 股个股解析。\n\n"
-        "请发送股票代码，例如 600519。\n"
-        "如果要结合持仓成本，可发送：600519 成本价 120。\n"
+        "请发送股票代码或股票名称，例如 600519、贵州茅台。\n"
+        "如果要结合持仓成本，可发送：贵州茅台 成本价 120。\n"
         "行情数据仅供参考，不构成投资建议。",
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("📢 进入频道", url="https://t.me/jksjsjs6969")]
@@ -566,6 +566,22 @@ def _store_result(code: str, cost: float | None, quote: str, image_bytes: bytes,
         oldest = min(STOCK_RESULT_CACHE, key=lambda key: STOCK_RESULT_CACHE[key][0])
         STOCK_RESULT_CACHE.pop(oldest, None)
     STOCK_RESULT_CACHE[(code, cost)] = (time.time(), quote, image_bytes, digits)
+
+
+def _add_stock_opener(body: str, name: str, digits: str) -> str:
+    """Put the occasional spoken marker after the stock identity."""
+    identity = f"{name}（{digits}）"
+    def tidy(value: str) -> str:
+        return value.replace("，该股这只票", "，该股").replace("，该股股", "，该股")
+    if body.startswith(identity):
+        return tidy(identity + "，该股" + body[len(identity):])
+    if body.startswith(f"{digits}{name}"):
+        return tidy(identity + "，该股" + body[len(f"{digits}{name}"):])
+    name_pos = body.find(name)
+    if name_pos >= 0:
+        end = name_pos + len(name)
+        return tidy(body[:name_pos] + identity + "，该股" + body[end:])
+    return tidy("该股，" + body)
 
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
