@@ -47,7 +47,9 @@ URL_RE = re.compile(r"https?://[^\s<>]+", re.IGNORECASE)
 STOCK_CODE_RE = re.compile(r"^(?:sh|sz)?(\d{6})$", re.IGNORECASE)
 STOCK_REQUEST_RE = re.compile(r"(?<!\d)(?:sh|sz)?(\d{6})(?!\d)", re.IGNORECASE)
 COST_RE = re.compile(r"(?:成本价格|成本价|成本|持仓价|买入价)\s*[:：=]?\s*(\d+(?:\.\d+)?)", re.IGNORECASE)
-ANALYSIS_VARIANT = 0
+# Seed the rotation after a restart so a cold-started Render instance does not
+# always begin with the same wording.
+ANALYSIS_VARIANT = int(time.time()) % 100000
 STOCK_PROFILES = {
     "300308": ("AI 算力与光模块", "公司主营高速光收发模块，订单表现主要看海外算力建设和 800G、1.6T 产品放量"),
     "601179": ("特高压与电网设备", "公司主营变压器、组合电器和高压开关，业绩主要受电网投资、特高压项目进度和海外订单影响"),
@@ -606,7 +608,16 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         cached = _cached_result(requested_code, cost)
         if cached:
             cached_quote, cached_image, _ = cached
-            await update.effective_message.reply_photo(photo=io.BytesIO(cached_image), caption=cached_quote)
+            # Rebuild the narrative on a cache hit so anti-abuse chart caching
+            # does not make every repeat request use identical wording.
+            try:
+                fresh_quote = await asyncio.to_thread(fetch_stock_quote, requested_code, cost)
+            except Exception:
+                fresh_quote = cached_quote
+            await update.effective_message.reply_photo(
+                photo=io.BytesIO(cached_image),
+                caption=fresh_quote,
+            )
             return
         chart = None
         try:
