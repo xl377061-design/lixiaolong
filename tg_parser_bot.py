@@ -295,6 +295,16 @@ def fetch_stock_quote(code: str, cost: float | None = None) -> str:
             ma_text=ma_text, resistance=period_high, support=period_low,
             trend=trend, volume_text=volume_text, ma60_text=ma60_text,
         )
+        # The colloquial Kimi additions contain useful natural openings, but
+        # some are intentionally very short.  Keep their tone while ensuring
+        # every published report remains a complete analysis rather than a
+        # one-line signal.
+        if not risk_stock and len(body) < 120:
+            body += (
+                f" 现价{price:.2f}元，近30日区间大致在{period_low:.2f}-{period_high:.2f}元，"
+                f"{volume_text}；{ma_text}，{ma60_text}。短线先看{support_level:.2f}元支撑，"
+                f"上方{resistance_level:.2f}元压力还在，没放量确认之前，先别急着追。"
+            )
         # Every ordinary template must carry the stock identity.  Older
         # templates start with the code+name, name only, or a generic phrase;
         # normalize all of them before applying the occasional spoken opener.
