@@ -120,6 +120,11 @@ ANALYSIS_TEMPLATES.extend([
     "{name}收在{price:.2f}元，整体{trend}，关键还是看{support:.2f}元能不能守住。",
 ])
 
+# Keep the original detailed set as the production rotation pool.  The extra
+# short colloquial snippets remain in the source for later editing, but should
+# not be used as complete channel reports on their own.
+DETAILED_ANALYSIS_TEMPLATES = ANALYSIS_TEMPLATES[:20]
+
 ST_ANALYSIS_TEMPLATES = [
     "这只票带有 ST 标识，先看公告和交易所信息，图上的均线、支撑压力只能辅助参考，不能单靠技术面判断摘帽或反转。",
     "{name}属于更高风险标的，短线涨跌不代表风险解除，后面重点看审计、重整和公司公告，别只盯着一根阳线。",
@@ -287,7 +292,7 @@ def fetch_stock_quote(code: str, cost: float | None = None) -> str:
         variant_index = ANALYSIS_VARIANT
         risk_stock = "ST" in name.upper() or "退市" in name or "暂停" in name
         template = (ST_ANALYSIS_TEMPLATES[variant_index % len(ST_ANALYSIS_TEMPLATES)]
-                    if risk_stock else ANALYSIS_TEMPLATES[variant_index % len(ANALYSIS_TEMPLATES)])
+                    if risk_stock else DETAILED_ANALYSIS_TEMPLATES[variant_index % len(DETAILED_ANALYSIS_TEMPLATES)])
         ANALYSIS_VARIANT += 1
         body = template.format(
             code=digits, name=name, price=price, change=change, pct=pct,
