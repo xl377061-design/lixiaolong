@@ -634,33 +634,40 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 f"{quote}\n\n图表这次没生成出来，先给你文字解析。稍后重试即可；反馈码：{request_id}"
             )
             return
+        # Cache the completed result before any Telegram delivery.  This keeps
+        # a successful chart available even when one Telegram request times out.
+        _store_result(requested_code, cost, quote, image_bytes, digits)
+
+        # Publish independently from the private reply.  A timeout or other
+        # error while replying to the requester must never skip the channel
+        # publish step.
+        try:
+            channel_image = io.BytesIO(image_bytes)
+            channel_image.name = f"stock-{digits}.png"
+            await context.bot.send_photo(
+                chat_id=required_channel(),
+                photo=channel_image,
+                caption=(
+                    f"{quote}\n\n"
+                    '<a href="https://t.me/xiaolongko_ai_bot?start=stock">'
+                    "📊 个股解析，请点击进入机器人</a>"
+                ),
+                parse_mode=ParseMode.HTML,
+            )
+        except Exception:
+            LOG.exception("Failed to publish stock result request_id=%s", request_id)
+
         try:
             await update.effective_message.reply_photo(
                 photo=io.BytesIO(image_bytes),
                 caption=quote,
             )
-            _store_result(requested_code, cost, quote, image_bytes, digits)
-            # Republish the result to the owner's channel.  A channel failure
-            # must not hide the result from the user who requested it.
-            try:
-                channel_image = io.BytesIO(image_bytes)
-                channel_image.name = f"stock-{digits}.png"
-                await context.bot.send_photo(
-                    chat_id=required_channel(),
-                    photo=channel_image,
-                    caption=(
-                        f"{quote}\n\n"
-                        '<a href="https://t.me/xiaolongko_ai_bot?start=stock">'
-                        "📊 个股解析，请点击进入机器人</a>"
-                    ),
-                    parse_mode=ParseMode.HTML,
-                )
-            except Exception:
-                LOG.exception("Failed to publish stock result request_id=%s", request_id)
         except Exception:
-            LOG.exception("Telegram photo send failed request_id=%s", request_id)
+            LOG.exception("Telegram private photo send failed request_id=%s", request_id)
+            # The photo request may have reached Telegram even if its response
+            # timed out, so do not send the full quote a second time.
             await update.effective_message.reply_text(
-                f"文字解析已经完成，但图片发送失败。稍后重试即可；反馈码：{request_id}\n\n{quote}"
+                f"解析已完成，图片可能正在发送中，请查看上方消息。反馈码：{request_id}"
             )
         finally:
             if chart is not None:
