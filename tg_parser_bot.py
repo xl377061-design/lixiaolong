@@ -295,12 +295,19 @@ def fetch_stock_quote(code: str, cost: float | None = None) -> str:
             ma_text=ma_text, resistance=period_high, support=period_low,
             trend=trend, volume_text=volume_text, ma60_text=ma60_text,
         )
-        # Profile headers already carry the stock identity; avoid repeating it
-        # when a rotated template starts with "code+name".
+        # Every ordinary template must carry the stock identity.  Older
+        # templates start with the code+name, name only, or a generic phrase;
+        # normalize all of them before applying the occasional spoken opener.
+        identity = f"{name}（{digits}）"
         if profile and body.startswith(f"{digits}{name}"):
             body = body[len(f"{digits}{name}"):].lstrip("：: ")
-        elif body.startswith(f"{digits}{name}"):
-            body = f"{name}（{digits}）" + body[len(f"{digits}{name}"):]
+        elif not profile:
+            if body.startswith(f"{digits}{name}"):
+                body = identity + body[len(f"{digits}{name}"):]
+            elif body.startswith(name):
+                body = identity + body[len(name):]
+            elif not body.startswith(identity):
+                body = identity + "：" + body
         prefix = ""
         if profile:
             prefix = f"{name}（{digits}）"
